@@ -12,15 +12,26 @@ Leve: so `@modelcontextprotocol/sdk` + `zod` + `fetch` nativo (fala com a API RE
 
 ## Instalar (cada dev, uma vez)
 
+O conector e **baixado** para a sua maquina (git clone), nao puxado de um pacote remoto a cada
+abertura: nao existe pacote publicado em npm, o codigo fica visivel na sua pasta, e a
+auto-atualizacao (`git pull --ff-only` a cada 6h) so funciona porque existe um `.git` ao lado.
+
 O admin te passa **o endereco do Trail** (a URL) e cria sua conta. Depois:
 
 ```bash
-# 1. registra o MCP no Claude Code (escopo user = vale em todos os seus projetos)
-claude mcp add tether -s user -- npx -y github:arsprengel/tether-mcp
+# 1. baixa o conector e instala as dependencias dele
+git clone https://github.com/arsprengel/tether-mcp.git ~/.trail-mcp
+npm --prefix ~/.trail-mcp install --omit=dev
 
-# 2. conecta esta maquina a sua conta (troque pela URL que o admin te passou)
-TETHER_API_URL=https://SEU-TETHER npx -y github:arsprengel/tether-mcp login
+# 2. registra o MCP no Claude Code (escopo user = vale em todos os seus projetos)
+claude mcp add trail -s user -- node ~/.trail-mcp/bin.js
+
+# 3. conecta esta maquina a sua conta (troque pela URL que o admin te passou)
+TETHER_API_URL=https://SEU-TETHER node ~/.trail-mcp/bin.js login
 ```
+
+No Windows, troque `~` pelo caminho real da sua pasta de usuario: o `claude mcp add` guarda o
+argumento cru e o Node nao expande `~`.
 
 O login abre o navegador numa pagina `/conectar`; voce confirma (ja logado) e o terminal recebe
 o token sozinho. A URL fica salva, entao o Claude ja sobe conectado nas proximas vezes.
@@ -30,9 +41,10 @@ Pronto. Abra o Claude em qualquer projeto e peca "lista as pendencias do tether"
 ## Comandos
 
 ```bash
-TETHER_API_URL=https://SEU-TETHER npx -y github:arsprengel/tether-mcp login   # conecta esta maquina
-npx -y github:arsprengel/tether-mcp status                                    # url, projeto, token
-npx -y github:arsprengel/tether-mcp logout                                    # apaga o token salvo
+TETHER_API_URL=https://SEU-TETHER node ~/.trail-mcp/bin.js login   # conecta esta maquina
+node ~/.trail-mcp/bin.js status                                    # url, projeto, token
+node ~/.trail-mcp/bin.js logout                                    # apaga o token salvo
+node ~/.trail-mcp/bin.js doctor                                    # destrava a auto-atualizacao
 ```
 
 O token fica em `~/.config/tether/token.json` (chmod 600). Revogue quando quiser pelo painel

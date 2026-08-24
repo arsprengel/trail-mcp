@@ -67,7 +67,7 @@ async function main() {
     if (!url) {
       process.stderr.write(
         'Defina o endereco do Trail no 1o login (o admin te passa), ex:\n' +
-          '  TETHER_API_URL=https://SEU-TETHER npx -y github:arsprengel/tether-mcp login\n',
+          `  TETHER_API_URL=https://SEU-TETHER node ${join(DIR, 'bin.js')} login\n`,
       )
       process.exit(1)
     }

@@ -9,7 +9,7 @@ export function createApiClient({ url, token, project }, fetchImpl = fetch) {
 
   async function req(method, path, body) {
     if (!base || !token) {
-      throw new Error('nao conectado - rode: TETHER_API_URL=<url> npx -y github:arsprengel/tether-mcp login')
+      throw new Error('nao conectado - rode: TETHER_API_URL=<url> node <pasta-do-conector>/bin.js login')
     }
     const headers = { ...authHeaders }
     const opt = { method, headers }
