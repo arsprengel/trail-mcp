@@ -114,6 +114,42 @@ export function formatMemory(entries) {
   return lines.join('\n')
 }
 
+// Lembretes VENCIDOS na abertura da sessao (item #70). Espelho de formatLembretes em
+// src/hooks/format.ts (tether). O lembrete ja avisava a pessoa no sino do produto; a IA que abre a
+// pasta ficava de fora, e era ela quem ia mexer no assunto.
+//
+// So o que JA venceu. Lembrete marcado para daqui a duas semanas nao e informacao no comeco desta
+// sessao - seria ruido em toda abertura ate a data chegar.
+const LEMBRETES_NA_LISTA = 10
+
+function diaISO(ts) {
+  return new Date(ts).toISOString().slice(0, 10)
+}
+
+export function formatLembretes(entries, agora = Date.now()) {
+  const vencidos = (entries ?? [])
+    // Numero/`??` obrigatorios: aqui o JSON de /api/reminders chega CRU, sem validacao. Servidor
+    // ainda nao migrado manda o registro sem os campos novos, e uma excecao aqui derruba o bloco
+    // INTEIRO de abertura - itens e MRP junto.
+    .filter((e) => (e.status ?? 'pending') === 'pending')
+    .filter((e) => Number.isFinite(Number(e.remind_at)) && Number(e.remind_at) <= agora)
+    .sort((a, b) => Number(a.remind_at) - Number(b.remind_at))
+  if (vencidos.length === 0) return null
+  const mostrados = vencidos.slice(0, LEMBRETES_NA_LISTA)
+  const lines = [
+    `[LEMBRETES VENCIDOS] ${vencidos.length} lembrete(s) com a data ja passada neste projeto:`,
+    ...mostrados.map((e) => `- ${diaISO(Number(e.remind_at))}: ${e.message} (${e.id})`),
+  ]
+  if (vencidos.length > mostrados.length)
+    lines.push(`- ... e mais ${vencidos.length - mostrados.length}; list_reminders({status:"pending"}) traz a lista toda.`)
+  lines.push(
+    'Trate cada um ANTES de seguir: se o assunto ja esta resolvido, feche com update_reminder(id, {status:"done"}); ' +
+      'se ainda nao, remarque a data com update_reminder(id, {remind_at:"AAAA-MM-DD"}). Lembrete vencido que ninguem ' +
+      'fecha volta em toda abertura de sessao, e vira ruido que o usuario para de ler.',
+  )
+  return lines.join('\n')
+}
+
 function sessionStart(context) {
   return JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } })
 }
@@ -139,25 +175,31 @@ export async function runHook(command, input = {}, fetchImpl = fetch) {
   const q = '?project=' + encodeURIComponent(project)
 
   if (command === 'context') {
-    const [items, memory] = await Promise.all([
+    const [items, memory, lembretes] = await Promise.all([
       fetchJson(cfg.url + '/api/items' + q, cfg.token, fetchImpl),
       fetchJson(cfg.url + '/api/memory' + q, cfg.token, fetchImpl),
+      fetchJson(cfg.url + '/api/reminders' + q + '&status=pending', cfg.token, fetchImpl),
     ])
     const open = (items ?? []).filter((i) => i.status !== 'done' && i.status !== 'dropped')
     const mem = memory ?? []
+    // Servidor antigo (que ainda nao serve lembrete) devolve null: o bloco simplesmente nao
+    // aparece, e nada mais muda.
+    const avisoDeLembrete = formatLembretes(lembretes ?? [])
     // Silencio total em pasta sem nada rastreado - senao poluiria todo projeto da maquina, ja
     // que com a nuvem ligada qualquer pasta responde. A convencao de status vai junto sempre que
     // o hook ja fala (inclusive em projeto so com MRP): nada mais cobra item in_progress no fim
     // do turno.
-    if (open.length === 0 && mem.length === 0) return { exitCode: 0 }
+    if (open.length === 0 && mem.length === 0 && !avisoDeLembrete) return { exitCode: 0 }
     const parts = []
     if (open.length > 0) parts.push(formatContext(open))
     parts.push(STATUS_CONVENTION)
     parts.push(formatMemory(mem))
-    // Por ULTIMO de proposito: e a linha imediatamente antes da tarefa do usuario, e a unica do
-    // bloco que pede acao ANTES de comecar. No meio do indice da MRP ela passaria batida.
+    // As duas ultimas sao as que pedem acao ANTES de comecar - no meio do indice da MRP passariam
+    // batidas. Entre elas, o lembrete fica por ULTIMO: a faxina e arrumacao da casa, e o lembrete e
+    // um compromisso que a PESSOA marcou e cuja data ja passou.
     const faxina = formatFaxina(mem)
     if (faxina) parts.push(faxina)
+    if (avisoDeLembrete) parts.push(avisoDeLembrete)
     return { exitCode: 0, stdout: sessionStart(parts.join('\n\n')) }
   }
 
