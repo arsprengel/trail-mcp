@@ -65,6 +65,30 @@ jobs:
             echo "::notice::$NOME@$VER ainda nao existe no registro - vai publicar."
           fi
 
+      # A armadilha que a automacao CRIOU: mexer no conector e dar push sem trocar o numero da
+      # versao passava batido com sinal VERDE ("nada a publicar"), que e exatamente o que uma
+      # entrega bem-sucedida parece. Aqui isso vira vermelho: se o codigo que vai dentro do pacote
+      # andou desde a ultima versao publicada e o numero ficou parado, o trabalho NAO chegou em
+      # ninguem - e alguem precisa saber disso agora, nao daqui a tres semanas.
+      - name: Mexeu no conector e esqueceu de trocar a versao?
+        if: steps.versao.outputs.publicar == 'nao'
+        env:
+          TAG: v${{ steps.versao.outputs.versao }}
+          VER: ${{ steps.versao.outputs.versao }}
+        run: |
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::notice::sem a marca $TAG pra comparar (versao anterior a esta esteira) - nada a conferir."
+            exit 0
+          fi
+          MUDOU=$(git diff --name-only "$TAG"..HEAD -- bin.js src package.json package-lock.json)
+          if [ -n "$MUDOU" ]; then
+            echo "::error::o conector mudou desde a versao $VER, mas o numero da versao continua $VER - NADA foi publicado e ninguem vai receber esta mudanca. Troque a versao no package.json e mande de novo."
+            echo "Mudou desde $TAG:"
+            echo "$MUDOU" | sed 's/^/  /'
+            exit 1
+          fi
+          echo "::notice::nada que vai dentro do pacote mudou desde $TAG - tudo certo."
+
       # Instala o pacote do zero num diretorio limpo e conversa com o conector pelo mesmo canal
       # que a ferramenta de IA usa. Pega arquivo que ficou de fora da publicacao e servidor que
       # sobe mas nao responde - antes de virar problema na maquina de outra pessoa.
