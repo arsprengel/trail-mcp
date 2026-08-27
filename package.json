@@ -1,6 +1,6 @@
 {
   "name": "usetrail",
-  "version": "1.17.1",
+  "version": "1.18.0",
   "description": "Trail's MCP server: gives your coding agent your team's tracker and the project's durable memory, scoped to the folder you have open.",
   "keywords": [
     "mcp",
