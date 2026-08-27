@@ -36,6 +36,9 @@
     "bin.js",
     "src"
   ],
+  "scripts": {
+    "smoke": "node scripts/smoke.mjs"
+  },
   "engines": {
     "node": ">=18"
   },

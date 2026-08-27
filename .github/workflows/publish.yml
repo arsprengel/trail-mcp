@@ -1,0 +1,114 @@
+# Publica o conector sozinho quando a versao muda.
+#
+# A armadilha que isto existe pra matar: o registro de pacotes e o GitHub sao lugares separados.
+# Subir commit NAO publicava nada, entao quem instalou pelo comando do guia ficava preso na versao
+# anterior enquanto o repositorio avancava - e ninguem percebia, porque nada quebrava.
+#
+# Agora o unico passo manual e trocar o numero da versao no package.json. O resto - conferir se
+# aquela versao ja existe no registro, provar o pacote instalando do zero, publicar, marcar a
+# versao no repositorio e anotar a novidade - acontece aqui.
+#
+# CREDENCIAL: nao ha chave guardada em lugar nenhum. A publicacao usa o "trusted publishing" do
+# registro, que troca uma credencial temporaria com o GitHub na hora. Isso exige um cadastro
+# unico, na pagina de acesso do pacote no site do registro, apontando para este repositorio e
+# para o NOME DESTE ARQUIVO (publish.yml) - renomear o arquivo derruba a publicacao ate recadastrar.
+# Se um dia for preciso voltar pra chave, basta guardar uma com o nome NPM_TOKEN nos segredos do
+# repositorio: o passo abaixo a usa sozinho, sem mexer em mais nada.
+
+name: Publicar o conector
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write # marcar a versao no repositorio e criar a nota de novidade
+  id-token: write # a credencial temporaria de publicacao
+
+concurrency:
+  group: publicar-conector
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # O trusted publishing exige uma versao recente da ferramenta do registro; a que vem no
+      # runner costuma ser mais velha.
+      - name: Ferramenta do registro atualizada
+        run: npm install -g npm@latest
+
+      - name: A versao do package.json ja esta publicada?
+        id: versao
+        run: |
+          VER=$(node -p "require('./package.json').version")
+          NOME=$(node -p "require('./package.json').name")
+          PUBLICADAS=$(npm view "$NOME" versions --json 2>/dev/null || echo '[]')
+          JA=$(node -e "const v=JSON.parse(process.argv[1]||'[]');console.log([].concat(v).includes(process.argv[2])?'sim':'nao')" "$PUBLICADAS" "$VER")
+          echo "versao=$VER" >> "$GITHUB_OUTPUT"
+          echo "nome=$NOME" >> "$GITHUB_OUTPUT"
+          echo "publicar=$([ "$JA" = nao ] && echo sim || echo nao)" >> "$GITHUB_OUTPUT"
+          if [ "$JA" = sim ]; then
+            echo "::notice::$NOME@$VER ja esta no registro - nada a publicar."
+          else
+            echo "::notice::$NOME@$VER ainda nao existe no registro - vai publicar."
+          fi
+
+      # Instala o pacote do zero num diretorio limpo e conversa com o conector pelo mesmo canal
+      # que a ferramenta de IA usa. Pega arquivo que ficou de fora da publicacao e servidor que
+      # sobe mas nao responde - antes de virar problema na maquina de outra pessoa.
+      - name: Provar o pacote antes de publicar
+        if: steps.versao.outputs.publicar == 'sim'
+        run: node scripts/smoke.mjs
+
+      - name: Credencial de reserva (so se houver uma guardada)
+        if: steps.versao.outputs.publicar == 'sim' && env.NPM_TOKEN != ''
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+          echo "::notice::usando a chave guardada em vez da credencial temporaria."
+
+      - name: Publicar
+        if: steps.versao.outputs.publicar == 'sim'
+        run: npm publish --access public --provenance
+
+      - name: Marcar a versao e anotar a novidade
+        if: steps.versao.outputs.publicar == 'sim'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.versao.outputs.versao }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::notice::a marca $TAG ja existia."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+
+      - name: Conferir que chegou no registro
+        if: steps.versao.outputs.publicar == 'sim'
+        env:
+          NOME: ${{ steps.versao.outputs.nome }}
+          VER: ${{ steps.versao.outputs.versao }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            LA=$(npm view "$NOME@$VER" version 2>/dev/null || true)
+            if [ "$LA" = "$VER" ]; then
+              echo "::notice::$NOME@$VER esta no ar."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::publicou sem erro, mas $NOME@$VER nao aparece no registro."
+          exit 1

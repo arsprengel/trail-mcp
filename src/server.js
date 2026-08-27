@@ -1,8 +1,16 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { createApiClient } from './api.js'
 import { planejarFaxina, REGUA_MRP, MRP_ALVO, INSTRUCAO_FAXINA } from './memory-review.js'
+
+// A versao vem do package.json, NAO escrita a mao aqui: com a publicacao automatica, um numero
+// duplicado passaria a mentir sozinho a cada release - e e justo esta string que a ferramenta de
+// IA mostra e que o painel usa pra saber em que versao cada pessoa esta.
+const VERSAO = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json'), 'utf8')).version
 
 // Espelha tether/src/core/schema.ts (fonte de verdade dos valores validos). Repo standalone,
 // nao importa o core do tether - se o core mudar os valores, atualizar aqui tambem.
@@ -214,7 +222,7 @@ export async function runServer(config) {
   }
   const api = createApiClient(config)
   const server = new McpServer(
-    { name: 'trail', version: '1.17.1' },
+    { name: 'trail', version: VERSAO },
     {
       instructions:
         'Trail: tracker de itens + MRP (Memoria Referencial de Projeto). ' +
