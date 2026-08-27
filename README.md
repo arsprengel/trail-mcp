@@ -1,99 +1,130 @@
-# tether-mcp
+# usetrail
 
-MCP do **Trail** - conecta o Claude Code (a IA) ao tracker de roadmap da sua equipe.
+The MCP server for **[Trail](https://usetrail.dev)** - it gives your coding agent your team's
+tracker and the project's durable memory, scoped to the folder you have open.
 
-Este pacote e so o **cliente**: ele fala com o seu servidor do Trail. Qualquer um pode instalar,
-mas para usar precisa de uma **conta** no seu Trail (criada pelo admin) - a trava de acesso e o
-login do servidor, nao este codigo. O login e pelo site (device flow, estilo `gh auth login`):
-voce nao copia token a mao. Cada pessoa conecta a propria maquina e o Claude passa a escrever
-**como ela**, so nos projetos que ela pode ver, e no projeto da **pasta aberta** (nao mistura).
+Your agent stops working blind. It reads what is open, writes what it did, and records what it
+learned the hard way - in the same board your team looks at, not in a scratch file that only
+that session can see.
 
-Leve: so `@modelcontextprotocol/sdk` + `zod` + `fetch` nativo (fala com a API REST; sem banco).
+This package is the **client**. It talks to your Trail account over the REST API; there is no
+database here. Dependencies are `@modelcontextprotocol/sdk`, `zod` and the built-in `fetch`.
 
-## Instalar (cada dev, uma vez)
-
-O conector e **baixado** para a sua maquina (git clone), nao puxado de um pacote remoto a cada
-abertura: nao existe pacote publicado em npm, o codigo fica visivel na sua pasta, e a
-auto-atualizacao (`git pull --ff-only` a cada 6h) so funciona porque existe um `.git` ao lado.
-
-O admin te passa **o endereco do Trail** (a URL) e cria sua conta. Depois:
+## Quick start
 
 ```bash
-# 1. baixa o conector e instala as dependencias dele
+# 1. connect this machine to your Trail account (opens your browser; no token to copy)
+npx usetrail login
+
+# 2. register it with your agent - this example is Claude Code
+claude mcp add trail -s user -- npx usetrail
+```
+
+No account yet? Create one at [usetrail.dev](https://usetrail.dev) - the free plan covers one
+project and three people.
+
+**Not tied to one agent.** This is a plain MCP server over stdio, speaking the three protocol
+versions in use today. Any MCP-compatible client can run it; only the registration command
+differs, and each client documents its own.
+
+**Prefer a local checkout?** Clone it instead, and the connector keeps itself up to date on its
+own (see [Updating](#updating)):
+
+```bash
 git clone https://github.com/arsprengel/tether-mcp.git ~/.trail-mcp
 npm --prefix ~/.trail-mcp install --omit=dev
-
-# 2. registra o MCP no Claude Code (escopo user = vale em todos os seus projetos)
+node ~/.trail-mcp/bin.js login
 claude mcp add trail -s user -- node ~/.trail-mcp/bin.js
-
-# 3. conecta esta maquina a sua conta (troque pela URL que o admin te passou)
-TETHER_API_URL=https://SEU-TETHER node ~/.trail-mcp/bin.js login
 ```
 
-No Windows, troque `~` pelo caminho real da sua pasta de usuario: o `claude mcp add` guarda o
-argumento cru e o Node nao expande `~`.
+On Windows, write the real path instead of `~`: the registration stores the argument verbatim
+and Node does not expand it.
 
-O login abre o navegador numa pagina `/conectar`; voce confirma (ja logado) e o terminal recebe
-o token sozinho. A URL fica salva, entao o Claude ja sobe conectado nas proximas vezes.
+## What your agent gets
 
-Pronto. Abra o Claude em qualquer projeto e peca "lista as pendencias do tether".
+**The tracker** - `list_items`, `get_item`, `add_item`, `update_item`, `move_item`, `get_next`,
+`delete_item`. Real items on your team's board, with type, status, priority, assignees and
+history. Work the agent picks up shows as in progress and closes when it is done, so the board
+is not a story someone has to retell.
 
-## Comandos
+**Project memory** - `list_memory`, `get_memory`, `add_memory`, `update_memory`, `review_memory`.
+The durable knowledge of a project: the deploy that has a trap in it, the decision nobody should
+relitigate, the command that is not in any README. Shared by everyone on the project, human or
+agent. A new session reads it before acting instead of rediscovering it.
+
+**Reminders** - `add_reminder`, `list_reminders`. Things with a date that must not be silently
+missed.
+
+**Attachments** - `add_attachment`, `get_attachment`. Files that belong to an item.
+
+## Which project it writes to
+
+Trail holds many projects. The connector uses **the folder you have open** as the project - the
+folder name, or whatever a `.trail` file next to it says, or the `TRAIL_PROJECT` variable. So
+the agent writes to the right project without being told, and two repositories never bleed into
+each other. To reach across, the agent passes `project` explicitly on the tool.
+
+## Session hook (Claude Code)
 
 ```bash
-TETHER_API_URL=https://SEU-TETHER node ~/.trail-mcp/bin.js login   # conecta esta maquina
-node ~/.trail-mcp/bin.js status                                    # url, projeto, token
-node ~/.trail-mcp/bin.js logout                                    # apaga o token salvo
-node ~/.trail-mcp/bin.js doctor                                    # destrava a auto-atualizacao
+npx usetrail hooks install
 ```
 
-O token fica em `~/.config/tether/token.json` (chmod 600). Revogue quando quiser pelo painel
-"Token da IA" do dashboard.
+Registers an opening hook in `~/.claude/settings.json` (with a backup, and without duplicating):
+every session that starts in a project with a tracker gets the open items and the project memory
+in context from the first message - the agent starts knowing, instead of depending on someone
+remembering to ask. Fail-silent by design: no login or no network and the hook stays quiet.
+`hooks uninstall` reverses it.
 
-## Como funciona o escopo de projeto
+Clients without a hook mechanism are covered too: the server's own instructions tell the agent
+to fetch the summary itself before acting.
 
-O tracker e um banco unico com varios projetos. O MCP usa **a pasta aberta** como projeto (o nome
-da pasta, ou a env `TETHER_PROJECT`). Assim o Claude escreve no projeto certo e nao mistura. Para
-mexer em outro projeto, a IA passa `project` explicito na tool.
+## Your own Trail
 
-## Configuracao (env)
+Point it at your server once and it stays pointed:
 
-- `TETHER_API_URL` - endereco do seu Trail. Obrigatorio no 1o login; depois fica salvo.
-- `TETHER_PROJECT` - forca o nome do projeto (default: o nome da pasta aberta).
-- `TETHER_API_TOKEN` - token direto (pula o login pelo site; util em CI).
+```bash
+TRAIL_API_URL=https://your-trail npx usetrail login
+```
 
-## Tools expostas
+Without that variable, `login` goes to the hosted service.
 
-Itens: `list_items`, `get_item`, `add_item`, `update_item`, `move_item`, `get_next`, `delete_item`.
+## Commands
 
-MRP (Memoria Referencial de Projeto, v1.1.0+): `list_memory`, `add_memory`, `update_memory` -
-o conhecimento duravel do projeto (comandos, deploy, gotchas, decisoes, contexto), compartilhado
-entre todos os participantes. A IA consulta ao comecar a trabalhar e registra o que descobre;
-no dashboard e a aba "Referencia".
+```bash
+npx usetrail            # start the MCP server over stdio - what your agent runs
+npx usetrail login      # connect this machine (browser confirmation, no token copying)
+npx usetrail status     # server address, current project, whether a token is present
+npx usetrail logout     # delete the saved token
+npx usetrail doctor     # find the install on this machine and unstick auto-updates
+```
 
-## Hooks de sessao (v1.3.0+, recomendado)
+The token is stored at `~/.config/trail/token.json` (mode 600). Revoke it whenever you want from
+the "AI token" panel in the app.
 
-`node <pasta>/bin.js hooks install` registra no seu `~/.claude/settings.json` (com backup e sem
-duplicar) o hook de ABERTURA: ao abrir uma sessao do Claude num projeto com tracker, os itens
-abertos e a MRP entram automaticos no contexto (a IA nasce sabendo, sem depender de chamar
-tool), junto com a convencao de manter o status dos itens em dia. Sempre fail-silent: sem
-login/rede o hook sai quieto e nada quebra. `hooks uninstall` desfaz.
+## Configuration
 
-O hook de FECHAMENTO saiu na **v1.11.0** (e o install remove o que estiver registrado). Ele
-cobrava reconciliar item in_progress no fim de cada turno, e isso saia na tela do usuario como
-"Stop hook error" com o comando do hook junto. Medido no proprio Claude Code: qualquer palavra
-que um hook devolva no fim do turno - inclusive contexto "silencioso" - reabre o turno e faz o
-modelo emitir MAIS UMA resposta na tela; calado, sai uma resposta so. A cobranca migrou pro
-texto de abertura, onde nao custa nada. Quem ainda tiver o hook antigo registrado nao precisa
-fazer nada: o comando existe e nao fala mais.
-O install.sh ja oferece esse registro no final.
+| Variable | What it does |
+| --- | --- |
+| `TRAIL_API_URL` | Your own Trail's address. Saved after the first login. Defaults to the hosted service. |
+| `TRAIL_PROJECT` | Forces the project name (default: the open folder). |
+| `TRAIL_API_TOKEN` | A token directly, skipping the browser login. Useful in CI. |
 
-## Atualizar (pegar tools novas)
+The former names (`TETHER_*`) keep working, with no deadline - the product used to be called
+Tether, and nothing anyone already configured has to change.
 
-A partir da **v1.2.0** o cliente instalado por clone se atualiza SOZINHO: ao subir, dispara um
-`git pull` silencioso em background (no maximo a cada 6h) - a sessao atual segue como esta e a
-PROXIMA ja sobe na versao nova. Sem rede ou com conflito local, nada acontece (fail-silent).
+## Updating
 
-Se a sua instalacao e anterior a v1.2.0, atualize UMA ultima vez na mao: entre na pasta do
-clone, `git pull` e reinicie as sessoes do Claude. Se instalou via `npx github:...`: limpe o
-cache do npx (`rm -rf ~/.npm/_npx`) e reinicie (via npx nao ha auto-update; prefira o clone).
+A cloned install **updates itself**: on startup it fires a quiet fast-forward pull in the
+background, at most every six hours. The running session keeps the version it loaded; the next
+one starts updated. No network or a local conflict and nothing happens, silently.
+
+An install through `npx` has no such mechanism - npm caches the package. Run `npx usetrail@latest`
+to force the current version, or use the clone if you would rather not think about it.
+
+Stuck on an old version? `npx usetrail doctor` finds the install, reports the version and
+unsticks it.
+
+## Requirements
+
+Node 18 or newer.

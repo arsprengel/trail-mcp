@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { resolveConfig, clearSaved, readSaved } from './src/config.js'
+import { resolveConfig, clearSaved, readSaved, URL_HOSPEDADA } from './src/config.js'
 import { runServer } from './src/server.js'
 import { runLogin } from './src/login.js'
 import { runHook } from './src/hook.js'
@@ -63,14 +63,9 @@ function maybeSelfUpdate() {
 
 async function main() {
   if (cmd === 'login') {
-    const url = process.env.TETHER_API_URL || readSaved()?.url
-    if (!url) {
-      process.stderr.write(
-        'Defina o endereco do Trail no 1o login (o admin te passa), ex:\n' +
-          `  TETHER_API_URL=https://SEU-TETHER node ${join(DIR, 'bin.js')} login\n`,
-      )
-      process.exit(1)
-    }
+    // Sem endereco escolhido, o login vai para o servico hospedado. Quem tem um Trail proprio
+    // passa o endereco uma vez (TRAIL_API_URL) e ele fica salvo dali em diante.
+    const url = process.env.TETHER_API_URL || readSaved()?.url || URL_HOSPEDADA
     await runLogin(url)
     return
   }
@@ -87,7 +82,7 @@ async function main() {
     const cfg = resolveConfig()
     process.stdout.write(`url:     ${cfg.url}\n`)
     process.stdout.write(`project: ${cfg.project}\n`)
-    process.stdout.write(`token:   ${cfg.token ? 'presente' : 'AUSENTE (rode: tether-mcp login)'}\n`)
+    process.stdout.write(`token:   ${cfg.token ? 'presente' : 'AUSENTE (rode: usetrail login)'}\n`)
     return
   }
   if (cmd === 'hook') {
@@ -145,25 +140,25 @@ async function main() {
       }
       return
     }
-    process.stderr.write('uso: tether-mcp hooks <install|uninstall>\n')
+    process.stderr.write('uso: usetrail hooks <install|uninstall>\n')
     process.exit(1)
   }
   if (cmd === '--help' || cmd === '-h' || cmd === 'help') {
     process.stdout.write(
       [
-        'tether-mcp - MCP do Trail',
+        'usetrail - o conector do Trail',
         '',
         'Uso:',
-        '  tether-mcp            sobe o servidor MCP (stdio) - usado pelo Claude',
-        '  tether-mcp login      conecta esta maquina ao Trail (login pelo site)',
-        '  tether-mcp logout     apaga o token salvo',
-        '  tether-mcp status     mostra url, projeto e se ha token',
-        '  tether-mcp doctor     acha a instalacao nesta maquina, diz a versao e destrava a',
+        '  usetrail            sobe o servidor MCP (stdio) - e o que a sua IA usa',
+        '  usetrail login      conecta esta maquina ao Trail (login pelo site)',
+        '  usetrail logout     apaga o token salvo',
+        '  usetrail status     mostra url, projeto e se ha token',
+        '  usetrail doctor     acha a instalacao nesta maquina, diz a versao e destrava a',
         '                        atualizacao automatica quando ela parou (aceita um caminho)',
-        '  tether-mcp hooks install|uninstall   registra/remove o hook de abertura de sessao do Claude',
+        '  usetrail hooks install|uninstall   registra/remove o hook de abertura de sessao do Claude',
         '                        (tracker + MRP automaticos no inicio, lembrete no stop)',
         '',
-        'Env: TRAIL_API_URL (endereco do Trail; obrigatorio no 1o login, o admin te passa),',
+        'Env: TRAIL_API_URL (so para Trail proprio; sem ela o login vai para o servico hospedado),',
         '     TRAIL_PROJECT (default = nome da pasta atual).',
         '     Os nomes antigos (TETHER_*) continuam valendo, sem prazo pra acabar.',
         '',

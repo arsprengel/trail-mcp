@@ -1,9 +1,35 @@
 {
-  "name": "tether-mcp",
+  "name": "usetrail",
   "version": "1.17.0",
-  "description": "MCP do Trail - conecta o Claude ao tracker de roadmap da sua equipe (login pelo site, sem copiar token).",
+  "description": "Trail's MCP server: gives your coding agent your team's tracker and the project's durable memory, scoped to the folder you have open.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "trail",
+    "usetrail",
+    "project-management",
+    "issue-tracker",
+    "roadmap",
+    "kanban",
+    "ai-agent",
+    "coding-agent",
+    "agent-memory",
+    "claude-code",
+    "codex",
+    "cursor"
+  ],
+  "homepage": "https://usetrail.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arsprengel/tether-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arsprengel/tether-mcp/issues"
+  },
   "type": "module",
   "bin": {
+    "usetrail": "./bin.js",
     "tether-mcp": "./bin.js"
   },
   "files": [

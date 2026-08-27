@@ -65,12 +65,18 @@ export function clearSaved() {
   return apagou
 }
 
-// Resolve a config do server: env > token salvo (login) > default.
+// Endereco do servico hospedado. E o default porque quem instala pelo registro publico chega
+// SEM saber que existe variavel de ambiente - e, sem um padrao, o primeiro comando falha e a
+// pessoa some. Quem roda um Trail proprio continua mandando no endereco por env ou pelo login
+// ja salvo, que vencem este valor.
+export const URL_HOSPEDADA = 'https://app.usetrail.dev'
+
+// Resolve a config do server: env > token salvo (login) > servico hospedado.
 // O project vem da PASTA ABERTA (ou TETHER_PROJECT): assim o Claude escreve no projeto
 // certo no banco unico da nuvem, sem misturar projetos (Onboarding Parte C).
 export function resolveConfig() {
   const saved = readSaved()
-  const url = (process.env.TETHER_API_URL || saved?.url || '').replace(/\/$/, '')
+  const url = (process.env.TETHER_API_URL || saved?.url || URL_HOSPEDADA).replace(/\/$/, '')
   let token = process.env.TETHER_API_TOKEN || saved?.token || ''
   const authEnv = process.env.TETHER_API_AUTH
   if (!token && authEnv) token = authEnv.replace(/^Bearer\s+/i, '').trim()
