@@ -14,10 +14,10 @@ database here. Dependencies are `@modelcontextprotocol/sdk`, `zod` and the built
 
 ```bash
 # 1. connect this machine to your Trail account (opens your browser; no token to copy)
-npx usetrail login
+npx -y usetrail@latest login
 
 # 2. register it with your agent - this example is Claude Code
-claude mcp add trail -s user -- npx usetrail
+claude mcp add trail -s user -- npx -y usetrail@latest
 ```
 
 No account yet? Create one at [usetrail.dev](https://usetrail.dev) - the free plan covers one
@@ -67,7 +67,7 @@ each other. To reach across, the agent passes `project` explicitly on the tool.
 ## Session hook (Claude Code)
 
 ```bash
-npx usetrail hooks install
+npx -y usetrail@latest hooks install
 ```
 
 Registers an opening hook in `~/.claude/settings.json` (with a backup, and without duplicating):
@@ -84,7 +84,7 @@ to fetch the summary itself before acting.
 Point it at your server once and it stays pointed:
 
 ```bash
-TRAIL_API_URL=https://your-trail npx usetrail login
+TRAIL_API_URL=https://your-trail npx -y usetrail@latest login
 ```
 
 Without that variable, `login` goes to the hosted service.
@@ -92,11 +92,11 @@ Without that variable, `login` goes to the hosted service.
 ## Commands
 
 ```bash
-npx usetrail            # start the MCP server over stdio - what your agent runs
-npx usetrail login      # connect this machine (browser confirmation, no token copying)
-npx usetrail status     # server address, current project, whether a token is present
-npx usetrail logout     # delete the saved token
-npx usetrail doctor     # find the install on this machine and unstick auto-updates
+npx -y usetrail@latest            # start the MCP server over stdio - what your agent runs
+npx -y usetrail@latest login      # connect this machine (browser confirmation, no token copying)
+npx -y usetrail@latest status     # server address, current project, whether a token is present
+npx -y usetrail@latest logout     # delete the saved token
+npx -y usetrail@latest doctor     # find the install on this machine and unstick auto-updates
 ```
 
 The token is stored at `~/.config/trail/token.json` (mode 600). Revoke it whenever you want from
@@ -115,14 +115,19 @@ Tether, and nothing anyone already configured has to change.
 
 ## Updating
 
-A cloned install **updates itself**: on startup it fires a quiet fast-forward pull in the
-background, at most every six hours. The running session keeps the version it loaded; the next
-one starts updated. No network or a local conflict and nothing happens, silently.
+**The `@latest` is not decoration.** Registered as `npx -y usetrail@latest`, the connector resolves
+the published version every time your agent starts a session, so a new release reaches you without
+anyone doing anything. Registered as bare `npx usetrail`, npm reuses whatever copy it cached the
+first time - and that machine stays on that version forever. Use `@latest`.
 
-An install through `npx` has no such mechanism - npm caches the package. Run `npx usetrail@latest`
-to force the current version, or use the clone if you would rather not think about it.
+The cost of `@latest` is about a second at session start, and a network call. Neither matters in
+practice: the connector talks to Trail over the network anyway.
 
-Stuck on an old version? `npx usetrail doctor` finds the install, reports the version and
+A cloned install updates itself differently: on startup it fires a quiet fast-forward pull in the
+background, at most every six hours. The running session keeps the version it loaded; the next one
+starts updated. No network or a local conflict and nothing happens, silently.
+
+Stuck on an old version? `npx -y usetrail@latest doctor` finds the install, reports the version and
 unsticks it.
 
 ## Requirements
