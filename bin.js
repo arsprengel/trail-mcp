@@ -174,6 +174,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  process.stderr.write('[tether-mcp] ' + (err instanceof Error ? err.message : String(err)) + '\n')
+  process.stderr.write('[trail] ' + (err instanceof Error ? err.message : String(err)) + '\n')
   process.exit(1)
 })

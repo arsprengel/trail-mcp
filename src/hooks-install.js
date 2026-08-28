@@ -78,5 +78,5 @@ export function uninstallHooks() {
     if (settings.hooks[event].length !== before) results.push(`${event}: removido`)
   }
   writeFileSync(path, JSON.stringify(settings, null, 2) + '\n')
-  return results.length ? results : ['nenhum hook do tether-mcp encontrado']
+  return results.length ? results : ['nenhum hook do trail encontrado']
 }

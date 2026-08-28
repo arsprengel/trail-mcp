@@ -3,10 +3,10 @@
   "name": "dev.usetrail/trail",
   "title": "Trail",
   "description": "Issue tracker and durable project memory for your coding agent, scoped to the folder you open.",
-  "version": "1.19.0",
+  "version": "1.20.0",
   "websiteUrl": "https://usetrail.dev",
   "repository": {
-    "url": "https://github.com/arsprengel/tether-mcp",
+    "url": "https://github.com/arsprengel/trail-mcp",
     "source": "github"
   },
   "icons": [
@@ -19,7 +19,7 @@
     {
       "registryType": "npm",
       "identifier": "usetrail",
-      "version": "1.19.0",
+      "version": "1.20.0",
       "transport": {
         "type": "stdio"
       },

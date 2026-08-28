@@ -31,7 +31,7 @@ differs, and each client documents its own.
 own (see [Updating](#updating)):
 
 ```bash
-git clone https://github.com/arsprengel/tether-mcp.git ~/.trail-mcp
+git clone https://github.com/arsprengel/trail-mcp.git ~/.trail-mcp
 npm --prefix ~/.trail-mcp install --omit=dev
 node ~/.trail-mcp/bin.js login
 claude mcp add trail -s user -- node ~/.trail-mcp/bin.js

@@ -1,6 +1,6 @@
 {
   "name": "usetrail",
-  "version": "1.19.0",
+  "version": "1.20.0",
   "mcpName": "dev.usetrail/trail",
   "description": "Trail's MCP server: gives your coding agent your team's tracker and the project's durable memory, scoped to the folder you have open.",
   "keywords": [
@@ -23,10 +23,10 @@
   "homepage": "https://usetrail.dev",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/arsprengel/tether-mcp.git"
+    "url": "git+https://github.com/arsprengel/trail-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/arsprengel/tether-mcp/issues"
+    "url": "https://github.com/arsprengel/trail-mcp/issues"
   },
   "type": "module",
   "bin": {

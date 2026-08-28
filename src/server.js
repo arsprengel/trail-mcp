@@ -217,7 +217,7 @@ function cortarCorpo(e, teto) {
 export async function runServer(config) {
   if (!config.url || !config.token) {
     process.stderr.write(
-      '[tether-mcp] ainda nao conectado - rode: TETHER_API_URL=<url> node <pasta-do-conector>/bin.js login\n',
+      '[trail] ainda nao conectado - rode: npx -y usetrail@latest login\n',
     )
   }
   const api = createApiClient(config)

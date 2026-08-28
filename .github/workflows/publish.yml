@@ -80,7 +80,7 @@ jobs:
             echo "::notice::sem a marca $TAG pra comparar (versao anterior a esta esteira) - nada a conferir."
             exit 0
           fi
-          MUDOU=$(git diff --name-only "$TAG"..HEAD -- bin.js src package.json package-lock.json)
+          MUDOU=$(git diff --name-only "$TAG"..HEAD -- bin.js src package.json package-lock.json server.json)
           if [ -n "$MUDOU" ]; then
             echo "::error::o conector mudou desde a versao $VER, mas o numero da versao continua $VER - NADA foi publicado e ninguem vai receber esta mudanca. Troque a versao no package.json e mande de novo."
             echo "Mudou desde $TAG:"
