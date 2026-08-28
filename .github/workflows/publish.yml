@@ -120,6 +120,32 @@ jobs:
           fi
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
 
+      # Segunda parada: o catalogo oficial do padrao de conexao de IA. E ele que alimenta as
+      # vitrines independentes, entao entrar aqui vale mais que entrar em cada uma na mao. A
+      # credencial e a prova de dominio (uma linha no DNS de usetrail.dev + a chave guardada nos
+      # segredos): nada interativo e nada que vence.
+      - name: Anunciar a versao no catalogo oficial
+        if: steps.versao.outputs.publicar == 'sim'
+        env:
+          CHAVE: ${{ secrets.MCP_DNS_PRIVATE_KEY }}
+          VER: ${{ steps.versao.outputs.versao }}
+        run: |
+          if [ -z "$CHAVE" ]; then
+            echo "::warning::sem a chave de dominio guardada - o catalogo oficial nao foi atualizado."
+            exit 0
+          fi
+          # A versao da ficha sai do package.json, nunca digitada duas vezes.
+          jq --arg v "$VER" '.version=$v | .packages[0].version=$v' server.json > server.tmp && mv server.tmp server.json
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          # O pacote ja foi publicado neste ponto - e ele que chega nas pessoas. Se o catalogo
+          # recusar (DNS fora do ar, catalogo instavel), isso vira AVISO e nao derruba a entrega;
+          # o aviso aparece no resumo da execucao e da pra republicar a ficha depois.
+          if ./mcp-publisher login dns --domain=usetrail.dev --private-key="$CHAVE" && ./mcp-publisher publish; then
+            echo "::notice::ficha do catalogo oficial atualizada para $VER."
+          else
+            echo "::warning::o pacote foi publicado, mas o catalogo oficial recusou a ficha - republique quando resolver."
+          fi
+
       - name: Conferir que chegou no registro
         if: steps.versao.outputs.publicar == 'sim'
         env:

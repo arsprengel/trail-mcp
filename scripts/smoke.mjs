@@ -105,6 +105,15 @@ async function main() {
   precisa(install.status === 0, `instalar o pacote falhou: ${install.stderr}`)
   const binario = join(temp, 'node_modules', PKG.name, 'bin.js')
 
+  await passo('a ficha do catalogo bate com o pacote', () => {
+    const ficha = JSON.parse(readFileSync(join(RAIZ, 'server.json'), 'utf8'))
+    precisa(ficha.name === PKG.mcpName, `a ficha se chama "${ficha.name}" e o pacote declara "${PKG.mcpName}"`)
+    precisa(ficha.version === PKG.version, `ficha na versao ${ficha.version}, pacote na ${PKG.version}`)
+    precisa(ficha.packages?.[0]?.identifier === PKG.name, 'a ficha aponta pra outro pacote')
+    precisa(ficha.packages?.[0]?.version === PKG.version, 'a versao do pacote dentro da ficha ficou pra tras')
+    precisa((ficha.description ?? '').length <= 100, 'a descricao passa do teto de 100 caracteres do catalogo')
+  })
+
   await passo('a ajuda abre e cita os comandos', () => {
     const r = rodar(process.execPath, [binario, '--help'])
     precisa(r.status === 0, `saiu com codigo ${r.status}`)
