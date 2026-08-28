@@ -133,3 +133,8 @@ unsticks it.
 ## Requirements
 
 Node 18 or newer.
+
+## License
+
+MIT. This package is the client - the connector you run on your own machine. Use it, fork it,
+adapt it. The Trail service it talks to is a separate, hosted product.

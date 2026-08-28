@@ -1,6 +1,6 @@
 {
   "name": "usetrail",
-  "version": "1.20.0",
+  "version": "1.20.1",
   "mcpName": "dev.usetrail/trail",
   "description": "Trail's MCP server: gives your coding agent your team's tracker and the project's durable memory, scoped to the folder you have open.",
   "keywords": [
@@ -20,6 +20,7 @@
     "codex",
     "cursor"
   ],
+  "license": "MIT",
   "homepage": "https://usetrail.dev",
   "repository": {
     "type": "git",
@@ -35,7 +36,8 @@
   },
   "files": [
     "bin.js",
-    "src"
+    "src",
+    "LICENSE"
   ],
   "scripts": {
     "smoke": "node scripts/smoke.mjs"
