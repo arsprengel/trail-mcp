@@ -55,6 +55,25 @@ const ReminderStatus = z.enum(['pending', 'done', 'dismissed'])
 function ok(data) {
   return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
 }
+
+// ANEXO DE IMAGEM: a IA so ENXERGA a foto se ela voltar como bloco de imagem do protocolo. Ate
+// 28/08/2026 a foto saia como base64 dentro do JSON de texto - um paredao de caracteres que nao
+// vira imagem nenhuma pro modelo. Quem anexava print no card via a IA perguntar "a que voce se
+// refere" com a foto ali do lado. Teto de 4 MB de arquivo cru (o modelo aceita 5 MB ja em base64).
+const MAX_IMAGEM_BYTES = 4_000_000
+
+// Dica de anexo junto do card. A ficha (`anexos`) vem pronta do servidor; ela pode NAO existir
+// quando o servidor ainda nao subiu a versao nova - por isso o guarda de Array.isArray.
+function comAnexos(item) {
+  if (!item || !Array.isArray(item.anexos) || item.anexos.length === 0) return item
+  const imagens = item.anexos.filter((a) => String(a?.content_type ?? '').startsWith('image/')).length
+  return {
+    ...item,
+    dica_anexos: imagens
+      ? `Este item tem ${imagens} imagem(ns) anexada(s). Chame get_attachment(id) pra VER a foto antes de perguntar ao usuario a que ele se refere.`
+      : 'Este item tem anexo(s). Use get_attachment(id) pra ler o conteudo.',
+  }
+}
 function fail(err) {
   const msg = err instanceof Error ? err.message : String(err)
   return { content: [{ type: 'text', text: `error: ${msg}` }], isError: true }
@@ -285,12 +304,12 @@ export async function runServer(config) {
   server.registerTool(
     'get_item',
     {
-      description: 'Detalhe completo de um item por id. Chame antes de agir sobre um item para ver o estado atual.' + ideaHint,
+      description: 'Detalhe completo de um item por id. Chame antes de agir sobre um item para ver o estado atual. Traz junto a ficha dos ANEXOS do card (nome/tipo/tamanho): se houver imagem, abra com get_attachment(id) e OLHE - o print costuma ser o pedido inteiro.' + ideaHint,
       inputSchema: { id: z.string() },
     },
     async (args) => {
       try {
-        return ok(await api.getItem(args.id))
+        return ok(comAnexos(await api.getItem(args.id)))
       } catch (e) {
         return fail(e)
       }
@@ -358,12 +377,12 @@ export async function runServer(config) {
   server.registerTool(
     'get_next',
     {
-      description: 'Retorna o proximo item aberto de maior prioridade. Chame quando precisar decidir o que atacar a seguir.' + scoped + ideaHint,
+      description: 'Retorna o proximo item aberto de maior prioridade, com a ficha dos anexos dele. Chame quando precisar decidir o que atacar a seguir.' + scoped + ideaHint,
       inputSchema: { project: z.string().optional() },
     },
     async (args) => {
       try {
-        return ok(await api.getNext(args))
+        return ok(comAnexos(await api.getNext(args)))
       } catch (e) {
         return fail(e)
       }
@@ -571,7 +590,7 @@ export async function runServer(config) {
   server.registerTool(
     'get_attachment',
     {
-      description: 'Le o CONTEUDO de um anexo sob demanda (texto extraido pra txt/csv; base64 pra imagem pequena). Nao chame a toa - a lista de anexos ja vem no get_item com nome e descricao.',
+      description: 'Le o CONTEUDO de um anexo sob demanda. IMAGEM VOLTA COMO IMAGEM DE VERDADE: se o card tem foto/print, CHAME AQUI e OLHE antes de perguntar ao usuario a que ele se refere. Texto extraido pra txt/csv. Nao chame a toa - a ficha dos anexos (nome, tipo, tamanho) ja vem no get_item.',
       inputSchema: { id: z.string() },
     },
     async (args) => {
@@ -579,10 +598,17 @@ export async function runServer(config) {
         const meta = await api.getAttachment(args.id)
         if (!meta) return fail(new Error('anexo nao encontrado'))
         if (meta.extracted_text) return ok({ ...meta, text: meta.extracted_text })
-        if (meta.content_type.startsWith('image/') && meta.size_bytes < 1_500_000) {
+        if (meta.content_type.startsWith('image/')) {
+          if (meta.size_bytes > MAX_IMAGEM_BYTES)
+            return ok({ ...meta, note: `imagem grande demais para ler aqui (limite ${MAX_IMAGEM_BYTES} bytes); baixe pelo dashboard` })
           const bytes = await api.downloadAttachment(args.id)
           if (!bytes) return fail(new Error('anexo nao encontrado'))
-          return ok({ ...meta, content_base64: Buffer.from(bytes).toString('base64') })
+          return {
+            content: [
+              ...ok({ ...meta, note: 'a imagem vai no bloco seguinte' }).content,
+              { type: 'image', data: Buffer.from(bytes).toString('base64'), mimeType: meta.content_type },
+            ],
+          }
         }
         return ok({ ...meta, note: 'sem texto extraido; baixe pelo dashboard para processar' })
       } catch (e) {
