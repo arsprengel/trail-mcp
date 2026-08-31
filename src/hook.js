@@ -29,7 +29,24 @@ function line(i) {
   // humanos/commits usam - pra IA nao traduzir via position (0-based, com gaps) e pegar o item
   // errado. Vem do payload da API (/api/items). Omite o #N se faltar (nao imprime "#undefined").
   const n = i.number != null ? `#${i.number} ` : ''
-  return `- ${n}[${i.type}/${i.status}/${i.priority}] ${i.title} (${i.id})`
+  // O sinal de suspeita de carona cabe em tres caracteres. Sem ele, a IA que ataca um ponto direto
+  // desta lista nunca saberia que ha uma pista guardada nele - e ao salvar o trabalho a pista some,
+  // sem ninguem ter lido. Espelho de linhaDeItem no tether (src/core/carona.ts).
+  const marca = i.tem_carona ? ' (?)' : ''
+  return `- ${n}[${i.type}/${i.status}/${i.priority}] ${i.title} (${i.id})${marca}`
+}
+
+// Linha explicando o sinal, so quando ha algum ponto marcado. Some sozinha no zero: nunca vira
+// ruido fixo na abertura de sessao. O campo chega do JSON CRU da API, sem validacao nenhuma no
+// meio: servidor que ainda nao subiu a mudanca manda a chave AUSENTE, e ai nada aparece - que e o
+// comportamento certo. Espelho de legendaDaCarona no tether.
+function legendaDaCarona(itens) {
+  if (!itens.some((i) => i.tem_carona)) return null
+  return (
+    'Os pontos marcados com (?) tem uma suspeita guardada: outro ponto foi concluido e pode ter ' +
+    'resolvido esse junto. Antes de atacar um deles, abra com get_item(id) - a suspeita vem ' +
+    'escrita la, e some sozinha assim que voce mexer no ponto.'
+  )
 }
 
 // Convencao do item #11: idea = captura crua. Ao atacar, a IA clarifica escopo + plan mode
@@ -56,7 +73,8 @@ export const STATUS_CONVENTION =
 
 export function formatContext(open) {
   const body = open.map(line).join('\n')
-  const base = `Tracker Trail deste projeto - ${open.length} item(ns) aberto(s):\n${body}\n\nConsulte/atualize via as tools do MCP tether (list_items, get_item, update_item, get_next) conforme avancar.`
+  const legenda = legendaDaCarona(open)
+  const base = `Tracker Trail deste projeto - ${open.length} item(ns) aberto(s):\n${body}\n${legenda ? `\n${legenda}\n` : ''}\nConsulte/atualize via as tools do MCP tether (list_items, get_item, update_item, get_next) conforme avancar.`
   const withIdea = open.some((i) => i.type === 'idea') ? `${base}\n\n${IDEA_CONVENTION}` : base
   return `${withIdea}\n\n${REMINDER_CONVENTION}`
 }
