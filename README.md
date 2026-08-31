@@ -66,15 +66,19 @@ each other. To reach across, the agent passes `project` explicitly on the tool.
 
 ## Session hook (Claude Code)
 
+Installed for you, once, when you log in - and on the connector's first run, which covers people
+who paste a token into the registration instead of logging in through the browser. It registers an
+opening hook in `~/.claude/settings.json` (with a backup, and without duplicating): every session
+that starts in a project with a tracker gets the open items and the project memory in context from
+the first message - the agent starts knowing, instead of depending on someone remembering to ask.
+Fail-silent by design: no login or no network and the hook stays quiet.
+
+It never fights you. If `~/.claude` doesn't exist, nothing is written. If you remove it with
+`hooks uninstall`, it does not come back on its own - put it back with:
+
 ```bash
 npx -y usetrail@latest hooks install
 ```
-
-Registers an opening hook in `~/.claude/settings.json` (with a backup, and without duplicating):
-every session that starts in a project with a tracker gets the open items and the project memory
-in context from the first message - the agent starts knowing, instead of depending on someone
-remembering to ask. Fail-silent by design: no login or no network and the hook stays quiet.
-`hooks uninstall` reverses it.
 
 Clients without a hook mechanism are covered too: the server's own instructions tell the agent
 to fetch the summary itself before acting.

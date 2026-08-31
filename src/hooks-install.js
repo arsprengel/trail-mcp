@@ -2,24 +2,60 @@ import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { configDir } from './config.js'
 
-// Registra/remove os hooks de sessao do Trail no ~/.claude/settings.json do usuario.
+// Registra/remove o gancho de abertura de sessao do Trail no ~/.claude/settings.json do usuario.
 // Cuidados (mexer em settings alheio e invasivo): backup .tether-bak antes de escrever,
-// registro IDEMPOTENTE (nao duplica; respeita hook do tether ja existente, inclusive o do
+// registro IDEMPOTENTE (nao duplica; respeita gancho do trail ja existente, inclusive o do
 // repo principal na maquina do admin), e JSON invalido aborta sem sobrescrever nada.
 
 const PKG_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
+const PACOTE = 'usetrail'
 
 export function settingsPath() {
   return join(homedir(), '.claude', 'settings.json')
 }
 
-function isTetherHook(cmd, word) {
-  return typeof cmd === 'string' && /tether/i.test(cmd) && cmd.includes(word)
+// Marca de que a instalacao automatica ja rodou UMA vez nesta maquina. Sem ela, quem removeu o
+// gancho de proposito veria ele voltar no proximo login ou na proxima abertura do servidor.
+function marcaPath() {
+  return join(configDir(), 'hooks.json')
 }
 
-function groupHasTetherHook(groups, word) {
-  return (groups ?? []).some((g) => (g.hooks ?? []).some((h) => isTetherHook(h.command, word)))
+function jaTentouSozinho() {
+  try {
+    return !!JSON.parse(readFileSync(marcaPath(), 'utf8')).auto
+  } catch {
+    return false
+  }
+}
+
+function marcarQueTentou() {
+  try {
+    mkdirSync(configDir(), { recursive: true })
+    writeFileSync(marcaPath(), JSON.stringify({ auto: new Date().toISOString() }, null, 2) + '\n')
+  } catch {
+    /* sem pasta de config gravavel: o pior caso e tentar de novo depois */
+  }
+}
+
+// O comando que o gancho roda. Instalado por clone (tem .git ao lado), aponta pro arquivo local -
+// ele se atualiza sozinho e nao paga rede a cada abertura. Instalado pelo registro publico, PKG_DIR
+// e a pasta temporaria do npx: caminho que caduca com a limpeza de cache E congela a versao daquele
+// dia. Nesse caso o gancho chama o pacote do mesmo jeito que o servidor e registrado.
+export function comandoDoGancho() {
+  if (existsSync(join(PKG_DIR, '.git'))) return `node "${join(PKG_DIR, 'bin.js')}" hook context`
+  return `npx -y ${PACOTE}@latest hook context`
+}
+
+// Reconhece um gancho NOSSO em qualquer das formas ja usadas: caminho local com "tether" no meio
+// (repo principal do admin e clones antigos), caminho com "trail", e o comando pelo pacote.
+function ehGanchoDoTrail(cmd, word) {
+  return typeof cmd === 'string' && /tether|trail/i.test(cmd) && cmd.includes(word)
+}
+
+function grupoTemGanchoDoTrail(groups, word) {
+  return (groups ?? []).some((g) => (g.hooks ?? []).some((h) => ehGanchoDoTrail(h.command, word)))
 }
 
 export function installHooks() {
@@ -32,17 +68,16 @@ export function installHooks() {
     mkdirSync(dirname(path), { recursive: true })
   }
   settings.hooks = settings.hooks ?? {}
-  const bin = join(PKG_DIR, 'bin.js')
   const results = []
   // So o de abertura. O de fechamento (Stop) saiu na v1.11.0: falar no fim do turno fazia a IA
   // emitir mais uma resposta na tela a cada mensagem trocada, e o que ele cobrava agora e dito
   // na abertura. Quem ja tinha o Stop registrado perde ele aqui - o comando ja e mudo de
   // qualquer forma, isto so evita rodar um processo a toa em todo fim de turno.
   const event = 'SessionStart'
-  const command = `node "${bin}" hook context`
+  const command = comandoDoGancho()
   settings.hooks[event] = settings.hooks[event] ?? []
-  if (groupHasTetherHook(settings.hooks[event], 'context')) {
-    results.push(`${event}: ja havia um hook do tether (mantido, nada a fazer)`)
+  if (grupoTemGanchoDoTrail(settings.hooks[event], 'context')) {
+    results.push(`${event}: ja havia um gancho do Trail (mantido, nada a fazer)`)
   } else {
     settings.hooks[event].push({ hooks: [{ type: 'command', command }] })
     results.push(`${event}: registrado (${command})`)
@@ -52,12 +87,38 @@ export function installHooks() {
     const before = stop.length
     // Pega tanto o nosso (bin.js hook reconcile) quanto o do repo principal, e nao depende da
     // palavra "tether" estar no caminho: quem clonou numa pasta de outro nome tambem limpa.
-    const isReconcile = (c) => typeof c === 'string' && /\breconcile\b/.test(c) && (/tether/i.test(c) || c.includes('hook reconcile'))
+    const isReconcile = (c) => typeof c === 'string' && /\breconcile\b/.test(c) && (/tether|trail/i.test(c) || c.includes('hook reconcile'))
     settings.hooks.Stop = stop.filter((g) => !(g.hooks ?? []).some((h) => isReconcile(h.command)))
     if (settings.hooks.Stop.length !== before) results.push('Stop: removido (nao existe mais)')
   }
   writeFileSync(path, JSON.stringify(settings, null, 2) + '\n')
   return results
+}
+
+// Instalacao automatica: e o que faz o resumo do projeto chegar sem ninguem saber que existe um
+// gancho. Roda ao entrar na conta e na primeira subida do servidor, porque quem cola credencial
+// em vez de entrar pelo site nunca passa pelo login. NUNCA lanca e NUNCA escreve em stdout (no
+// servidor, stdout e o canal do protocolo). Devolve o que aconteceu, pro login poder contar.
+//   'instalado' | 'ja-tinha' | 'sem-claude' | 'ja-tentou' | 'falhou'
+export function installHooksAuto() {
+  try {
+    // Sem a pasta do Claude a pessoa usa outra ferramenta: criar config de um programa que ela
+    // nao tem seria invasivo e nao serviria pra nada.
+    if (!existsSync(join(homedir(), '.claude'))) return 'sem-claude'
+    const path = settingsPath()
+    if (existsSync(path)) {
+      const settings = JSON.parse(readFileSync(path, 'utf8'))
+      if (grupoTemGanchoDoTrail(settings.hooks?.SessionStart, 'context')) return 'ja-tinha'
+    }
+    if (jaTentouSozinho()) return 'ja-tentou'
+    installHooks()
+    marcarQueTentou()
+    return 'instalado'
+  } catch {
+    // JSON invalido, disco cheio, permissao: o settings do usuario fica como estava e a proxima
+    // abertura tenta de novo (a marca so e escrita quando deu certo).
+    return 'falhou'
+  }
 }
 
 export function uninstallHooks() {
@@ -66,17 +127,19 @@ export function uninstallHooks() {
   const settings = JSON.parse(readFileSync(path, 'utf8'))
   copyFileSync(path, path + '.tether-bak')
   const results = []
+  // Remove SO os nossos, nas duas formas: caminho pro bin.js e chamada do pacote pelo npx. O
+  // gancho do repo principal do admin usa outro caminho/forma e fica intocado.
+  const nosso = (c) =>
+    typeof c === 'string' && (c.includes('bin.js" hook ') || new RegExp(`${PACOTE}(@[^\\s]*)?\\s+hook\\s`).test(c))
   for (const event of ['SessionStart', 'Stop']) {
     const groups = settings.hooks?.[event]
     if (!Array.isArray(groups)) continue
     const before = groups.length
-    // Remove SO os nossos (bin.js + subcomando "hook ..."); o hook do repo principal
-    // do admin usa outro caminho/forma e fica intocado.
-    settings.hooks[event] = groups.filter(
-      (g) => !(g.hooks ?? []).some((h) => typeof h.command === 'string' && h.command.includes('bin.js" hook ')),
-    )
+    settings.hooks[event] = groups.filter((g) => !(g.hooks ?? []).some((h) => nosso(h.command)))
     if (settings.hooks[event].length !== before) results.push(`${event}: removido`)
   }
   writeFileSync(path, JSON.stringify(settings, null, 2) + '\n')
-  return results.length ? results : ['nenhum hook do trail encontrado']
+  // Marca a passagem: quem removeu de proposito nao pode ver o gancho voltar sozinho depois.
+  marcarQueTentou()
+  return results.length ? results : ['nenhum gancho do Trail encontrado']
 }

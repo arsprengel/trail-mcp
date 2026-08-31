@@ -47,7 +47,9 @@ function rodar(cmd, args, opts = {}) {
 function conversar(binario, mensagens, { env = {}, timeoutMs = 20000 } = {}) {
   return new Promise((resolveP, rejectP) => {
     const proc = spawn(process.execPath, [binario], {
-      env: { ...process.env, TETHER_PROJECT: 'smoke', ...env },
+      // HOME de mentira: o conector registra o gancho de abertura na primeira subida, e o smoke
+      // nao pode mexer no ~/.claude de quem esta rodando (nem do runner da esteira).
+      env: { ...process.env, HOME: temp, XDG_CONFIG_HOME: join(temp, '.config'), TETHER_PROJECT: 'smoke', ...env },
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     const respostas = []
@@ -123,7 +125,9 @@ async function main() {
   })
 
   await passo('sem credencial, aponta pro servico hospedado em vez de morrer', () => {
-    const r = rodar(process.execPath, [binario, 'status'], { env: { ...process.env, TETHER_PROJECT: 'smoke' } })
+    const r = rodar(process.execPath, [binario, 'status'], {
+      env: { ...process.env, HOME: temp, XDG_CONFIG_HOME: join(temp, '.config'), TETHER_PROJECT: 'smoke' },
+    })
     precisa(r.status === 0, `saiu com codigo ${r.status}`)
     precisa(r.stdout.includes('https://app.usetrail.dev'), 'nao caiu no endereco padrao do servico hospedado')
     precisa(r.stdout.includes('project: smoke'), 'nao respeitou o projeto informado')

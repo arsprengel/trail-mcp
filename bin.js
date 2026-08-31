@@ -8,7 +8,7 @@ import { runServer } from './src/server.js'
 import { runLogin } from './src/login.js'
 import { runHook } from './src/hook.js'
 import { healTetherIfRenamed } from './src/tether-heal.js'
-import { installHooks, uninstallHooks, settingsPath } from './src/hooks-install.js'
+import { installHooks, installHooksAuto, uninstallHooks, settingsPath } from './src/hooks-install.js'
 import { runDoctor } from './src/doctor.js'
 import { espelharAmbiente } from './src/nome-legado.js'
 
@@ -67,6 +67,16 @@ async function main() {
     // passa o endereco uma vez (TRAIL_API_URL) e ele fica salvo dali em diante.
     const url = process.env.TETHER_API_URL || readSaved()?.url || URL_HOSPEDADA
     await runLogin(url)
+    // Entrar na conta e o momento em que a pessoa liga o Trail de proposito - e o unico momento
+    // em que da pra registrar o gancho de abertura sem inventar um passo novo pra ela. Antes disto
+    // o gancho so existia no instalador por clone, que saiu de cena: quem entrou pelo caminho de
+    // hoje ficava sem o resumo automatico e nem sabia que existia um.
+    const gancho = installHooksAuto()
+    if (gancho === 'instalado') {
+      process.stdout.write('Resumo do projeto no inicio da conversa: ligado. Feche e abra o Claude pra valer.\n')
+    } else if (gancho === 'falhou') {
+      process.stdout.write('(nao consegui ligar o resumo automatico de abertura; rode: usetrail hooks install)\n')
+    }
     return
   }
   if (cmd === 'doctor') {
@@ -155,8 +165,9 @@ async function main() {
         '  usetrail status     mostra url, projeto e se ha token',
         '  usetrail doctor     acha a instalacao nesta maquina, diz a versao e destrava a',
         '                        atualizacao automatica quando ela parou (aceita um caminho)',
-        '  usetrail hooks install|uninstall   registra/remove o hook de abertura de sessao do Claude',
-        '                        (tracker + MRP automaticos no inicio, lembrete no stop)',
+        '  usetrail hooks install|uninstall   registra/remove o gancho de abertura de sessao do',
+        '                        Claude (tracker + MRP no contexto desde a primeira mensagem). O',
+        '                        login ja registra sozinho - isto e pra quem removeu e quer de volta',
         '',
         'Env: TRAIL_API_URL (so para Trail proprio; sem ela o login vai para o servico hospedado),',
         '     TRAIL_PROJECT (default = nome da pasta atual).',
@@ -168,6 +179,10 @@ async function main() {
   }
   // default (sem argumento): MCP server stdio
   maybeSelfUpdate()
+  // Quem cola a credencial no registro em vez de entrar pelo site nunca roda o login - e ficaria
+  // sem o gancho pra sempre. A primeira subida do servidor cobre esse caminho. Roda uma vez so
+  // (marca em ~/.config/tether/hooks.json), e calado: aqui o stdout e do protocolo.
+  installHooksAuto()
   // Auto-heal do .tether antes de resolver o projeto da sessao.
   await healTetherIfRenamed()
   await runServer(resolveConfig())
