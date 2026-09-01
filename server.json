@@ -3,7 +3,7 @@
   "name": "dev.usetrail/trail",
   "title": "Trail",
   "description": "Issue tracker and durable project memory for your coding agent, scoped to the folder you open.",
-  "version": "1.24.0",
+  "version": "1.24.1",
   "websiteUrl": "https://usetrail.dev",
   "repository": {
     "url": "https://github.com/arsprengel/trail-mcp",
@@ -19,7 +19,7 @@
     {
       "registryType": "npm",
       "identifier": "usetrail",
-      "version": "1.24.0",
+      "version": "1.24.1",
       "transport": {
         "type": "stdio"
       },

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { writeSaved } from './config.js'
+import { writeSaved, tokenPath } from './config.js'
 
 // Abre a URL no navegador do usuario (best-effort; a URL impressa no terminal ja resolve).
 function openBrowser(url) {
@@ -48,7 +48,10 @@ export async function runLogin(url, out = process.stdout) {
     if (pr.status === 200) {
       const body = await pr.json()
       writeSaved({ url: base, token: body.token })
-      out.write('\nConectado. Token salvo em ~/.config/tether/token.json\n')
+      // O caminho sai de quem GRAVA, nao escrito a mao: a pasta mudou de nome (tether -> trail) e a
+      // frase ficou pra tras apontando pra pasta errada. Quem for procurar a propria credencial nao
+      // pode ser mandado pro lugar errado, e agora nao ha como as duas divergirem de novo.
+      out.write(`\nConectado. Token salvo em ${tokenPath()}\n`)
       // NAO diga "o Claude": daqui nao da pra saber qual IA esta rodando o comando, e quem ligou
       // pelo Antigravity/Codex lia o nome errado na propria confirmacao.
       out.write('A sua IA ja escreve no tracker como voce. Pode fechar a aba do navegador.\n')
