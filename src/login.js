@@ -49,7 +49,9 @@ export async function runLogin(url, out = process.stdout) {
       const body = await pr.json()
       writeSaved({ url: base, token: body.token })
       out.write('\nConectado. Token salvo em ~/.config/tether/token.json\n')
-      out.write('O Claude ja escreve no tracker como voce. Pode fechar a aba do navegador.\n')
+      // NAO diga "o Claude": daqui nao da pra saber qual IA esta rodando o comando, e quem ligou
+      // pelo Antigravity/Codex lia o nome errado na propria confirmacao.
+      out.write('A sua IA ja escreve no tracker como voce. Pode fechar a aba do navegador.\n')
       return
     }
     if (pr.status === 410) throw new Error('o codigo expirou; rode o login de novo')
