@@ -64,20 +64,30 @@ folder name, or whatever a `.trail` file next to it says, or the `TRAIL_PROJECT`
 the agent writes to the right project without being told, and two repositories never bleed into
 each other. To reach across, the agent passes `project` explicitly on the tool.
 
-## Session hook (Claude Code)
+## Session hook (Claude Code, Gemini CLI, Antigravity)
 
 Installed for you, once, when you log in - and on the connector's first run, which covers people
-who paste a token into the registration instead of logging in through the browser. It registers an
-opening hook in `~/.claude/settings.json` (with a backup, and without duplicating): every session
+who paste a token into the registration instead of logging in through the browser. Every session
 that starts in a project with a tracker gets the open items and the project memory in context from
 the first message - the agent starts knowing, instead of depending on someone remembering to ask.
 Fail-silent by design: no login or no network and the hook stays quiet.
 
-`usetrail status` tells you whether it is on, so you never have to go digging through settings
-files to find out.
+Each tool keeps this in its own place, so the connector writes to the one that tool actually reads:
 
-It never fights you. If `~/.claude` doesn't exist, nothing is written - and `hooks install` will
-not create a Claude Code config on a machine that has no Claude Code. If you remove it with
+- **Claude Code** - a session-start hook in `~/.claude/settings.json`.
+- **Gemini CLI** - a session-start hook in `~/.gemini/settings.json`.
+- **Antigravity** - it has no session-start event, so the connector uses the closest one and speaks
+  only once per conversation, through a tiny local shortcut that keeps the other turns cheap.
+  Antigravity also gets something the other two don't need: **`gemini mcp add` does not connect
+  Trail in Antigravity** - that command writes to `~/.gemini/settings.json`, and Antigravity reads
+  `~/.gemini/config/mcp_config.json`. The connector registers itself there, so the Trail tools
+  actually show up in its MCP panel.
+
+`usetrail status` tells you, per tool found on this machine, whether it is on - so you never have
+to go digging through settings files to find out.
+
+It never fights you. A tool that isn't on the machine gets nothing created for it, and
+`hooks install` will not fabricate a config for a program you don't have. If you remove it with
 `hooks uninstall`, it does not come back on its own - put it back with:
 
 ```bash

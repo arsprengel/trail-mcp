@@ -18,6 +18,13 @@ export function settingsPath() {
 
 // Marca de que a instalacao automatica ja rodou UMA vez nesta maquina. Sem ela, quem removeu o
 // gancho de proposito veria ele voltar no proximo login ou na proxima abertura do servidor.
+//
+// ESTE ARQUIVO E SO DO CLAUDE CODE, E CONTINUA SENDO ESCRITO DE UMA VEZ SO. Houve a tentacao de
+// guardar aqui uma chave por IA, lendo-mesclando-gravando. Nao da: cada sessao da IA sobe o seu
+// proprio conector, entao ha varios processos escrevendo ao mesmo tempo, e um leitor atrasado
+// apaga a chave que o outro acabou de gravar. Medido: 48 perdas em 200 pares simultaneos. A marca
+// perdida faz o gancho que a pessoa removeu de proposito VOLTAR sozinho. As outras IAs usam um
+// arquivo por marca (ver outras-ias.js), que nao tem como se atropelar.
 function marcaPath() {
   return join(configDir(), 'hooks.json')
 }
@@ -77,17 +84,25 @@ export function estadoDoGancho() {
 // dia. Nesse caso o gancho chama o pacote do mesmo jeito que o servidor e registrado.
 export function comandoDoGancho() {
   if (existsSync(join(PKG_DIR, '.git'))) return `node "${join(PKG_DIR, 'bin.js')}" hook context`
-  return `npx -y ${PACOTE}@latest hook context`
+  // O `--silent` cala o npm, e nao e enfeite: o Gemini CLI, quando a saida do gancho nao e JSON,
+  // usa o que veio pelo canal de erro E MOSTRA como mensagem de sistema na abertura da conversa.
+  // Sem ele, um "npm notice: nova versao disponivel" aparecia pra pessoa como se fosse recado do
+  // Trail, justamente na pasta onde o resumo devia ficar calado.
+  return `npx -y --silent ${PACOTE}@latest hook context`
 }
 
 // Reconhece um gancho NOSSO em qualquer das formas ja usadas: caminho local com "tether" no meio
 // (repo principal do admin e clones antigos), caminho com "trail", e o comando pelo pacote.
-function ehGanchoDoTrail(cmd, word) {
+export function ehGanchoDoTrail(cmd, word) {
   return typeof cmd === 'string' && /tether|trail/i.test(cmd) && cmd.includes(word)
 }
 
-function grupoTemGanchoDoTrail(groups, word) {
-  return (groups ?? []).some((g) => (g.hooks ?? []).some((h) => ehGanchoDoTrail(h.command, word)))
+// Os Array.isArray nao sao paranoia: estes arquivos sao editados a mao pelas pessoas, e um
+// SessionStart escrito como objeto (ou um "hooks" que virou texto) derrubava o `status` inteiro
+// com erro na tela, numa maquina onde ele funcionava.
+export function grupoTemGanchoDoTrail(groups, word) {
+  if (!Array.isArray(groups)) return false
+  return groups.some((g) => (Array.isArray(g?.hooks) ? g.hooks : []).some((h) => ehGanchoDoTrail(h?.command, word)))
 }
 
 export function installHooks() {

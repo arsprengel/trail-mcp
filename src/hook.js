@@ -172,6 +172,26 @@ function sessionStart(context) {
   return JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: context } })
 }
 
+// O Antigravity nao tem gancho de inicio de conversa: o mais proximo dispara antes de CADA pensada
+// da IA. O passo que injetamos e do tipo que PERMANECE na conversa, e nao o efemero - lido por
+// dentro do programa dele, a mensagem efemera tem um nivel de permanencia ('todas' ou 'so a
+// ultima') que o contrato de gancho NAO deixa escolher; com uma injecao por conversa, o resumo
+// poderia sumir depois da primeira pensada e o recurso pareceria instalado sem entregar nada.
+//
+// O preco de permanecer e perder o enquadramento de "isto nao veio do usuario" que o proprio
+// Antigravity da a mensagem efemera. Por isso o texto SE APRESENTA na primeira linha e SE DESPEDE
+// na ultima - sem isso a IA responde ao resumo como se a pessoa tivesse perguntado alguma coisa.
+export function envelopeAntigravity(resumo) {
+  const texto = [
+    '[Trail] Isto nao foi digitado pelo usuario: e o resumo do projeto, injetado automaticamente na abertura desta conversa.',
+    '',
+    resumo,
+    '',
+    'Use isto como contexto e siga direto para o que o usuario pedir. Nao responda a esta mensagem.',
+  ].join('\n')
+  return JSON.stringify({ injectSteps: [{ userMessage: texto }] })
+}
+
 async function fetchJson(url, token, fetchImpl = fetch) {
   try {
     const r = await fetchImpl(url, {
