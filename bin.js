@@ -148,18 +148,21 @@ async function main() {
     process.stdout.write(`abertura: ${gancho}\n`)
     // Uma linha por IA ENCONTRADA nesta maquina. IA que a pessoa nao tem nao vira linha: o status
     // existe pra responder de primeira, e lista de programa ausente e ruido.
-    const abertura = {
-      // O Gemini CLI so roda gancho em pasta que a pessoa marcou como confiavel (ele pergunta na
-      // primeira vez que abre ali). Dizer "ligado" seco faria o status garantir uma coisa que nao
-      // acontece na pasta que ela ainda nao confiou.
-      ligado: 'ligado (entra sozinho na abertura, nas pastas que voce marcou como confiaveis)',
+    const abertura = (ligadoTexto) => ({
+      ligado: ligadoTexto,
       ausente: 'AUSENTE (rode: usetrail hooks install)',
       quebrado: 'registrado mas incompleto - rode: usetrail hooks install',
       desligado: 'registrado, mas desligado na configuracao dessa IA',
       ilegivel: 'nao consegui ler a configuracao dessa IA',
-    }
+    })
+    // A ressalva da pasta confiavel e SO do Gemini CLI: ele so roda gancho em pasta que a pessoa
+    // marcou como confiavel (ele pergunta na primeira vez que abre ali). Repetir isso na linha do
+    // Antigravity seria inventar uma regra que ele nao tem - e este trabalho inteiro nasceu de uma
+    // frase que afirmava algo que nao era verdade.
+    const aberturaGemini = abertura('ligado (entra sozinho na abertura, nas pastas que voce marcou como confiaveis no Gemini)')
+    const aberturaAntigravity = abertura('ligado (o resumo entra sozinho na abertura da conversa)')
     if (temGeminiCli({ olharPath: true })) {
-      process.stdout.write(`gemini:   ${abertura[estadoGanchoGemini()]}\n`)
+      process.stdout.write(`gemini:   ${aberturaGemini[estadoGanchoGemini()]}\n`)
     }
     if (temAntigravity()) {
       const listado = {
@@ -167,7 +170,7 @@ async function main() {
         ausente: 'AUSENTE da lista de ferramentas - rode: usetrail hooks install',
         ilegivel: 'nao consegui ler a configuracao dele',
       }[estadoMcpAntigravity()]
-      process.stdout.write(`antigravity: ${listado}; abertura ${abertura[estadoGanchoAntigravity()]}\n`)
+      process.stdout.write(`antigravity: ${listado}; abertura ${aberturaAntigravity[estadoGanchoAntigravity()]}\n`)
     }
     // O silencio sobre o Antigravity e a pior resposta possivel pra quem o usa num perfil (Windows)
     // e digita o comando em outro (WSL, um container, outro usuario) - o caso do proprio dono, onde
