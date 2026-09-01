@@ -8,7 +8,7 @@ import { runServer } from './src/server.js'
 import { runLogin } from './src/login.js'
 import { runHook } from './src/hook.js'
 import { healTetherIfRenamed } from './src/tether-heal.js'
-import { installHooks, installHooksAuto, uninstallHooks, settingsPath } from './src/hooks-install.js'
+import { installHooks, installHooksAuto, uninstallHooks, settingsPath, estadoDoGancho, temClaudeCode } from './src/hooks-install.js'
 import { runDoctor } from './src/doctor.js'
 import { espelharAmbiente } from './src/nome-legado.js'
 
@@ -93,6 +93,15 @@ async function main() {
     process.stdout.write(`url:     ${cfg.url}\n`)
     process.stdout.write(`project: ${cfg.project}\n`)
     process.stdout.write(`token:   ${cfg.token ? 'presente' : 'AUSENTE (rode: usetrail login)'}\n`)
+    // O resumo do projeto na abertura da conversa. Responder isto aqui e o que evita a caca de
+    // sete comandos que a IA faz quando alguem pergunta "o gancho esta configurado?".
+    const gancho = {
+      ligado: 'ligado (o resumo do projeto entra sozinho quando a conversa abre)',
+      ausente: 'AUSENTE (rode: usetrail hooks install)',
+      'sem-claude': 'nao se aplica - Claude Code nao encontrado nesta maquina',
+      ilegivel: 'nao consegui ler a configuracao do Claude Code',
+    }[estadoDoGancho()]
+    process.stdout.write(`abertura: ${gancho}\n`)
     return
   }
   if (cmd === 'hook') {
@@ -139,6 +148,22 @@ async function main() {
   if (cmd === 'hooks') {
     const sub = process.argv[3]
     if (sub === 'install' || sub === 'uninstall') {
+      // Sem Claude Code na maquina, instalar CRIAVA a pasta e o arquivo de configuracao dele do
+      // zero - numa maquina de quem usa Codex ou Antigravity, isso e deixar lixo de um programa
+      // que a pessoa nem tem. Aconteceu de verdade: a IA do dono, perguntada se o gancho estava
+      // configurado, rodou este comando e fabricou a configuracao.
+      if (sub === 'install' && !temClaudeCode({ olharPath: true }) && !process.argv.includes('--forcar')) {
+        process.stdout.write(
+          [
+            'Claude Code nao encontrado nesta maquina - nada foi criado.',
+            'O gancho de abertura hoje e so dele. Nas outras IAs o Trail se apresenta pelas',
+            'proprias instrucoes do conector, e nao ha nada pra instalar aqui.',
+            'Acabou de instalar o Claude Code e ele ainda nao rodou? Repita com --forcar.',
+            '',
+          ].join('\n'),
+        )
+        return
+      }
       try {
         const results = sub === 'install' ? installHooks() : uninstallHooks()
         process.stdout.write(results.map((r) => `  ${r}`).join('\n') + '\n')
@@ -162,7 +187,7 @@ async function main() {
         '  usetrail            sobe o servidor MCP (stdio) - e o que a sua IA usa',
         '  usetrail login      conecta esta maquina ao Trail (login pelo site)',
         '  usetrail logout     apaga o token salvo',
-        '  usetrail status     mostra url, projeto e se ha token',
+        '  usetrail status     mostra url, projeto, se ha token e se o resumo de abertura esta ligado',
         '  usetrail doctor     acha a instalacao nesta maquina, diz a versao e destrava a',
         '                        atualizacao automatica quando ela parou (aceita um caminho)',
         '  usetrail hooks install|uninstall   registra/remove o gancho de abertura de sessao do',

@@ -73,7 +73,11 @@ that starts in a project with a tracker gets the open items and the project memo
 the first message - the agent starts knowing, instead of depending on someone remembering to ask.
 Fail-silent by design: no login or no network and the hook stays quiet.
 
-It never fights you. If `~/.claude` doesn't exist, nothing is written. If you remove it with
+`usetrail status` tells you whether it is on, so you never have to go digging through settings
+files to find out.
+
+It never fights you. If `~/.claude` doesn't exist, nothing is written - and `hooks install` will
+not create a Claude Code config on a machine that has no Claude Code. If you remove it with
 `hooks uninstall`, it does not come back on its own - put it back with:
 
 ```bash

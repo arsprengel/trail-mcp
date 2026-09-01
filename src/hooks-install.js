@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { join, dirname } from 'node:path'
+import { join, dirname, delimiter } from 'node:path'
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { configDir } from './config.js'
@@ -36,6 +36,38 @@ function marcarQueTentou() {
     writeFileSync(marcaPath(), JSON.stringify({ auto: new Date().toISOString() }, null, 2) + '\n')
   } catch {
     /* sem pasta de config gravavel: o pior caso e tentar de novo depois */
+  }
+}
+
+// Existe Claude Code nesta maquina? A PASTA e o sinal barato, e o unico que a instalacao
+// automatica usa (ela roda sem ninguem olhando, entao erra pro lado conservador). O binario no
+// PATH so e consultado pelo comando explicito: ele cobre quem acabou de instalar o Claude Code e
+// ainda nao abriu nenhuma sessao - recusar justo essa pessoa seria recusar quem esta configurando
+// tudo do zero.
+export function temClaudeCode({ olharPath = false } = {}) {
+  if (existsSync(join(homedir(), '.claude'))) return true
+  if (!olharPath) return false
+  const exts = process.platform === 'win32' ? ['.cmd', '.exe', '.bat', ''] : ['']
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) continue
+    for (const ext of exts) if (existsSync(join(dir, 'claude' + ext))) return true
+  }
+  return false
+}
+
+// O que o `status` mostra sobre o gancho. Existe porque perguntar "o gancho esta configurado?"
+// custava SETE comandos: na maquina do dono (01/09/2026) a IA rodou --help, status e doctor, depois
+// vasculhou a pasta do Claude com mais tres buscas, e so entao instalou. Uma linha no status resolve.
+//   'ligado' | 'ausente' | 'sem-claude' | 'ilegivel'
+export function estadoDoGancho() {
+  if (!existsSync(join(homedir(), '.claude'))) return 'sem-claude'
+  const path = settingsPath()
+  if (!existsSync(path)) return 'ausente'
+  try {
+    const settings = JSON.parse(readFileSync(path, 'utf8'))
+    return grupoTemGanchoDoTrail(settings.hooks?.SessionStart, 'context') ? 'ligado' : 'ausente'
+  } catch {
+    return 'ilegivel'
   }
 }
 

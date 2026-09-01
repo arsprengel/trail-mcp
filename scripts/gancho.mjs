@@ -99,6 +99,41 @@ console.log('\nGancho de abertura que se instala sozinho\n')
   checa('gancho antigo do repo principal e respeitado, nao duplicado', r === 'ja-tinha' && ganchos(dir).length === 1, `devolveu ${r}, ${ganchos(dir).length} gancho(s)`)
 }
 
+// O que o `status` responde sobre o gancho. Uma linha aqui poupa a caca de sete comandos que a IA
+// faz quando alguem pergunta se o gancho esta configurado.
+{
+  const dir = casaNova({ comClaude: false })
+  const { estadoDoGancho } = await mod()
+  checa('status: sem Claude Code, diz que nao se aplica', estadoDoGancho() === 'sem-claude')
+  void dir
+}
+
+{
+  casaNova()
+  const { estadoDoGancho, installHooksAuto } = await mod()
+  checa('status: com Claude e sem gancho, diz ausente', estadoDoGancho() === 'ausente')
+  installHooksAuto()
+  checa('status: depois de instalar, diz ligado', estadoDoGancho() === 'ligado')
+}
+
+{
+  casaNova({ settings: '{ quebrado' })
+  const { estadoDoGancho } = await mod()
+  checa('status: configuracao quebrada nao vira "ligado" por engano', estadoDoGancho() === 'ilegivel')
+}
+
+// Instalar NAO pode fabricar a configuracao do Claude Code na maquina de quem usa outra IA.
+{
+  const dir = casaNova({ comClaude: false })
+  const { temClaudeCode } = await mod()
+  const pathSemClaude = { ...process.env, PATH: '/nao-existe-em-lugar-nenhum' }
+  const antes = process.env.PATH
+  process.env.PATH = pathSemClaude.PATH
+  checa('sem pasta e sem o programa no caminho, nao ha Claude Code', temClaudeCode({ olharPath: true }) === false)
+  process.env.PATH = antes
+  checa('e nada foi criado na casa', !existsSync(join(dir, '.claude')))
+}
+
 for (const d of casas) rmSync(d, { recursive: true, force: true })
 console.log(falhas ? `\n${falhas} falha(s)\n` : '\nTudo passou\n')
 process.exit(falhas ? 1 : 0)
