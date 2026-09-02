@@ -28,7 +28,7 @@ const LIMITE_GANCHO_S = 25
 
 // Carimbo do atalho. Sobe quando o CONTEUDO do atalho muda - e so isso destrava a reescrita nas
 // maquinas que ja tem a versao anterior instalada.
-export const VERSAO_ATALHO = 2
+export const VERSAO_ATALHO = 3
 
 export function geminiDir() {
   return join(homedir(), '.gemini')
@@ -424,10 +424,17 @@ async function main() {
     if (!(n === 0 || n === 1)) return sai('{}')
   }
 
-  filho = spawn(acharNpx(), ['-y', '--silent', '${PACOTE}@latest', 'hook', 'antigravity'], {
-    stdio: ['pipe', 'pipe', 'ignore'],
-    shell: process.platform === 'win32',
-  })
+  // Duas formas, e a diferenca importa. No Windows a chamada precisa passar pelo interpretador de
+  // linha, e passar LISTA de argumentos junto com ele e a forma que o Node desaconselha desde a
+  // versao 20 (ela avisa, e um dia deixa de funcionar): la vai a linha inteira, de uma vez, com o
+  // caminho do npx ja entre aspas. Fora do Windows nao ha interpretador no meio, entao a lista de
+  // argumentos e a forma certa - e a unica que dispensa qualquer escapamento.
+  const argumentos = ['-y', '--silent', '${PACOTE}@latest', 'hook', 'antigravity']
+  const opcoes = { stdio: ['pipe', 'pipe', 'ignore'] }
+  filho =
+    process.platform === 'win32'
+      ? spawn([acharNpx(), ...argumentos].join(' '), { ...opcoes, shell: true })
+      : spawn(acharNpx(), argumentos, opcoes)
   // Junta os PEDACOS e so no fim vira texto. Somando pedaco a pedaco, um caractere acentuado que
   // caisse na fronteira virava lixo - e o JSON continuava valido, entao o texto estragado seguia
   // pro modelo sem ninguem notar.

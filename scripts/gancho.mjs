@@ -733,6 +733,10 @@ console.log('\nO atalho do Antigravity rodando de verdade\n')
   const fonte = readFileSync(atalhoPath(), 'utf8')
   checa('no Windows o atalho poe o caminho do npx entre aspas', /win32.*'"' \+ ao_lado \+ '"'/.test(fonte))
   checa('e fora do Windows nao poe (la nao ha interpretador no meio)', fonte.includes(": ao_lado"))
+  // Passar LISTA de argumentos junto com o interpretador e a forma que o Node desaconselha desde a
+  // versao 20: ela avisa hoje e um dia deixa de funcionar. No Windows vai a linha inteira.
+  checa('no Windows a chamada vai como uma linha so, sem lista de argumentos', fonte.includes("].join(' '), { ...opcoes, shell: true })"), fonte.slice(fonte.indexOf('filho ='), fonte.indexOf('filho =') + 200))
+  checa('e fora do Windows vai com lista, sem interpretador', fonte.includes('spawn(acharNpx(), argumentos, opcoes)'))
   void dir
 }
 
