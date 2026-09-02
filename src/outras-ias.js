@@ -220,11 +220,15 @@ function ehServidorDoTrail(cfg) {
 // e todas respondem vazio - "ligado" na tela e mudo na pratica. Nao gravamos a credencial em
 // lugar nenhum alem deste arquivo, que e o mesmo tipo de lugar onde a pessoa ja a colocou; assim
 // desconectar continua funcionando do mesmo jeito para as duas IAs.
-function servidorDoTrail() {
+function servidorDoTrail({ peloPlugin = false } = {}) {
   const servidor = { command: 'npx', args: ['-y', `${PACOTE}@latest`] }
+  // O carimbo que o conector reconhece quando o Antigravity o sobe PELO PACOTE. E a unica prova de
+  // que o pacote carregou de verdade naquela maquina - e sem ela a limpeza do caminho antigo seria
+  // uma aposta que, errada, deixa a pessoa sem Trail nenhum.
+  if (peloPlugin) servidor.env = { TRAIL_PELO_PLUGIN: '1' }
   try {
     const cfgAtual = resolveConfig()
-    if (cfgAtual.token && !readSaved()?.token) servidor.env = { TRAIL_API_TOKEN: cfgAtual.token }
+    if (cfgAtual.token && !readSaved()?.token) servidor.env = { ...servidor.env, TRAIL_API_TOKEN: cfgAtual.token }
   } catch {
     /* sem credencial nenhuma: registra sem env, e o login depois resolve */
   }
@@ -684,7 +688,7 @@ export function estadoGanchoAntigravity() {
 
 // Carimbo do plugin. Sobe quando QUALQUER arquivo escrito dentro dele muda - e so isso destrava a
 // reescrita nas maquinas que ja tem a versao anterior.
-export const VERSAO_PLUGIN = 1
+export const VERSAO_PLUGIN = 2
 
 export function antigravityPluginsDir() {
   return join(antigravityDir(), 'plugins')
@@ -755,7 +759,7 @@ function conteudoPlugin(comResumo) {
   if (VERSAO_PACOTE) ficha.version = VERSAO_PACOTE
   const arquivos = {
     'plugin.json': JSON.stringify(ficha, null, 2) + '\n',
-    'mcp_config.json': JSON.stringify({ mcpServers: { [NOME_SERVIDOR]: servidorDoTrail() } }, null, 2) + '\n',
+    'mcp_config.json': JSON.stringify({ mcpServers: { [NOME_SERVIDOR]: servidorDoTrail({ peloPlugin: true }) } }, null, 2) + '\n',
     'rules/AGENTS.md': REGRAS,
   }
   if (comResumo) {
@@ -817,6 +821,22 @@ export function instalarPluginAntigravity({ comResumo = true } = {}) {
   return tinha ? 'atualizado' : 'instalado'
 }
 
+// O conector registra que FOI SUBIDO PELO PACOTE. Chamado na subida do servidor, calado e sem
+// nunca lancar (ali o stdout e do protocolo). Um arquivo, criado uma vez.
+export function marcarPluginAtivo() {
+  try {
+    if (process.env.TRAIL_PELO_PLUGIN !== '1') return
+    if (existsSync(marcaPath('plugin-carregou'))) return
+    marcar('plugin-carregou')
+  } catch {
+    /* sem pasta gravavel: o pior caso e a limpeza do caminho antigo demorar mais */
+  }
+}
+
+export function pluginJaCarregou() {
+  return jaTentou('plugin-carregou')
+}
+
 // A limpeza do caminho antigo. So roda DEPOIS de o plugin estar em disco, e so tira o que e NOSSO
 // (reconhecido pelo comando, nunca pelo nome da chave). Sem ela, o Antigravity subiria o Trail
 // DUAS vezes - dois conjuntos das mesmas ferramentas na lista da pessoa, e o resumo de abertura
@@ -824,6 +844,11 @@ export function instalarPluginAntigravity({ comResumo = true } = {}) {
 //   'limpo' | 'nada' | 'ilegivel' | 'falhou'
 export function limparInstalacaoAntigaAntigravity() {
   if (!existsSync(pluginDir())) return 'nada'
+  // A PROVA VEM ANTES DA LIMPEZA. Enquanto o Antigravity nao tiver subido o Trail pelo pacote pelo
+  // menos uma vez, o caminho antigo FICA - e a pessoa continua com o Trail funcionando por ele.
+  // Sem esta linha, uma maquina onde o pacote nao carrega termina sem Trail nenhum, e o unico aviso
+  // seria a pessoa perceber sozinha que as ferramentas sumiram.
+  if (!pluginJaCarregou()) return 'esperando-prova'
   let mexeu = false
   const mcpLido = lerJson(antigravityMcpPath())
   const hooksLido = lerJson(antigravityHooksPath())
@@ -973,6 +998,13 @@ function autoPluginAntigravity(passo) {
     }
   }
   r.plugin = jaEhNosso || noCaminhoAntigo ? instalar() : passo('antigravity-plugin', instalar)
+  // ENQUANTO O PACOTE NAO PROVA QUE CARREGA, o caminho antigo tambem e mantido - inclusive em
+  // maquina nova, que senao ficaria sem nada se o pacote nao for lido. Quando a prova chega, a
+  // limpeza logo abaixo tira o antigo e sobra so o pacote.
+  if (!pluginJaCarregou()) {
+    r.mcp = passo('antigravity-mcp', () => registrarMcpAntigravity())
+    r.antigravity = passo('antigravity', () => instalarGanchoAntigravity())
+  }
   // A limpeza so acontece com o plugin JA em disco. Na ordem contraria, uma falha de escrita
   // deixaria a pessoa sem nenhum dos dois caminhos.
   if (['instalado', 'atualizado', 'ja-tinha'].includes(r.plugin)) {

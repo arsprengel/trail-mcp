@@ -1050,7 +1050,11 @@ const arquivosDoPlugin = (pdir) => ['plugin.json', 'mcp_config.json', 'hooks.jso
   const regras = readFileSync(join(p, 'rules', 'AGENTS.md'), 'utf8')
   checa('as regras de conduta viajam dentro do pacote', regras.includes('in_progress') && regras.includes('list_memory'), regras.slice(0, 80))
   checa('e a primeira frase delas diz quando NAO se aplicam', regras.split('\n').slice(0, 5).join(' ').includes('valem quando a pasta aberta tem um projeto'), regras.slice(0, 200))
-  checa('nada foi escrito nos arquivos globais do Antigravity', !existsSync(join(dir, '.gemini', 'config', 'mcp_config.json')) && !existsSync(join(dir, '.gemini', 'config', 'hooks.json')))
+  // O caminho antigo TAMBEM e escrito enquanto o pacote nao provou que carrega. Isso e de
+  // proposito: numa maquina onde o Antigravity ignora o pacote, so ele sustenta o Trail. Provado no
+  // campo em 02/09/2026 - o pacote posto na mao nao foi lido, e limpar antes teria deixado a
+  // maquina sem Trail nenhum.
+  checa('sem prova de que o pacote carrega, o caminho antigo tambem fica', existsSync(join(dir, '.gemini', 'config', 'mcp_config.json')) && existsSync(join(dir, '.gemini', 'config', 'hooks.json')))
   // Escrever no arquivo de regras GLOBAL da pessoa valeria pra TODOS os projetos dela, inclusive os
   // que nada tem a ver com o Trail. E escrever no config.json seria o conector ligando o proprio
   // plugin por cima da escolha dela.
@@ -1067,9 +1071,20 @@ const arquivosDoPlugin = (pdir) => ['plugin.json', 'mcp_config.json', 'hooks.jso
   const atalhoVelho = m.atalhoPath()
   m = await outras()
   const r = m.instalarOutrasIAsAuto()
+  checa('o pacote entra, mas a migracao ESPERA a prova', r.plugin === 'instalado' && r.limpeza === 'esperando-prova', `${r.plugin} / ${r.limpeza}`)
+  checa('e por isso o caminho antigo continua de pe', Object.keys(lerJson(join(dir, '.gemini', 'config', 'mcp_config.json'))?.mcpServers ?? {}).length === 1 && existsSync(atalhoVelho))
+  // A PROVA: o Antigravity subiu o Trail PELO PACOTE, e o registro do pacote traz o carimbo que o
+  // conector reconhece no proprio ambiente. So dai o caminho antigo sai.
+  const carimbo = lerJson(join(m.pluginDir(), 'mcp_config.json'))?.mcpServers?.trail?.env?.TRAIL_PELO_PLUGIN
+  checa('o registro do pacote leva o carimbo que serve de prova', carimbo === '1', String(carimbo))
+  process.env.TRAIL_PELO_PLUGIN = '1'
+  m = await outras()
+  m.marcarPluginAtivo()
+  const depois = m.instalarOutrasIAsAuto()
+  delete process.env.TRAIL_PELO_PLUGIN
   const mcpGlobal = lerJson(join(dir, '.gemini', 'config', 'mcp_config.json'))
   const hooksGlobal = lerJson(join(dir, '.gemini', 'config', 'hooks.json'))
-  checa('migra quem estava no caminho antigo', r.plugin === 'instalado' && r.limpeza === 'limpo', `${r.plugin} / ${r.limpeza}`)
+  checa('com a prova, a migracao acontece', depois.limpeza === 'limpo', JSON.stringify(depois))
   checa('e o Trail nao fica registrado duas vezes', Object.keys(mcpGlobal?.mcpServers ?? {}).length === 0 && JSON.stringify(hooksGlobal) === '{}', `${JSON.stringify(mcpGlobal)} ${JSON.stringify(hooksGlobal)}`)
   checa('o atalho velho sai do lugar antigo', !existsSync(atalhoVelho))
   checa('e o novo esta dentro do pacote', existsSync(join(m.pluginDir(), 'hook.mjs')))
@@ -1084,8 +1099,11 @@ const arquivosDoPlugin = (pdir) => ['plugin.json', 'mcp_config.json', 'hooks.jso
     mcpConfig: JSON.stringify({ mcpServers: { outro: { command: 'node', args: ['dele.js'] } } }),
     agHooks: JSON.stringify({ dela: { PreInvocation: [{ type: 'command', command: 'echo oi' }] } }),
   })
-  const { instalarOutrasIAsAuto } = await outras()
-  instalarOutrasIAsAuto()
+  process.env.TRAIL_PELO_PLUGIN = '1'
+  const m = await outras()
+  m.marcarPluginAtivo()
+  m.instalarOutrasIAsAuto()
+  delete process.env.TRAIL_PELO_PLUGIN
   const mcpGlobal = lerJson(join(dir, '.gemini', 'config', 'mcp_config.json'))
   const hooksGlobal = lerJson(join(dir, '.gemini', 'config', 'hooks.json'))
   checa('a limpeza nao encosta no que e da pessoa', !!mcpGlobal?.mcpServers?.outro && !!hooksGlobal?.dela, `${JSON.stringify(mcpGlobal)} ${JSON.stringify(hooksGlobal)}`)

@@ -26,6 +26,8 @@ import {
   antigravityMcpPath,
   antigravityHooksPath,
   temPluginsAntigravity,
+  marcarPluginAtivo,
+  pluginJaCarregou,
   instalarPluginAntigravity,
   limparInstalacaoAntigaAntigravity,
   estadoPluginAntigravity,
@@ -183,6 +185,12 @@ async function main() {
         }[plugin]
         process.stdout.write(`antigravity: ${dito}\n`)
         process.stdout.write(`  (pasta do plugin: ${pluginDir()})\n`)
+        // Enquanto nao ha prova, as duas instalacoes convivem de proposito - e o status tem que
+        // dizer isso, senao a pessoa que ve o Trail duplicado na lista de ferramentas acha que e bug.
+        if (!pluginJaCarregou()) {
+          process.stdout.write('  (o registro antigo continua ligado ate o Antigravity subir o Trail pelo pacote uma vez;\n')
+          process.stdout.write('   ate la voce pode ver o Trail duas vezes na lista de ferramentas dele, e some sozinho)\n')
+        }
       } else {
         const listado = {
           ligado: 'o Trail esta na lista de ferramentas dele',
@@ -348,11 +356,15 @@ async function main() {
             return [
               linha,
               limpeza === 'limpo' ? 'a instalacao antiga, espalhada em tres arquivos, foi removida (backup .tether-bak ao lado)' : null,
+              limpeza === 'esperando-prova' ? 'o registro antigo FICA ate o Antigravity subir o Trail pelo pacote pelo menos uma vez - assim voce nao fica sem Trail se ele ignorar o pacote' : null,
               limpeza === 'ilegivel' ? 'nao consegui ler a configuracao antiga dele - ela ficou onde estava' : null,
               temCredencial ? null : 'resumo de abertura: NAO entrou ainda - falta entrar na conta (rode: usetrail login)',
             ].filter(Boolean)
           })
-        } else {
+        }
+        // Sem a prova de que o pacote carrega, o caminho antigo tambem e escrito: e ele que
+        // sustenta o Trail nessa maquina ate o pacote se provar (ou nao).
+        if (!temPluginsAntigravity() || !pluginJaCarregou()) {
           tentar('Antigravity', () => [frase('entrou na lista de ferramentas dele', antigravityMcpPath(), registrarMcpAntigravity())].filter(Boolean))
         }
         if (!temCredencial) {
@@ -370,7 +382,7 @@ async function main() {
           // status dizer "registrado mas incompleto" rodava este comando, ouvia "ja estava" e
           // continuava quebrado - o remedio anunciado nao agia. So no caminho antigo: onde ha
           // plugin, o pacote inteiro ja foi escrito (e conferido) acima.
-          if (!temPluginsAntigravity()) {
+          if (!temPluginsAntigravity() || !pluginJaCarregou()) {
             tentar('Antigravity', () => {
               const linha = frase('resumo de abertura registrado', antigravityHooksPath(), instalarGanchoAntigravity())
               const reparo = consertarGanchoAntigravity() === 'consertado'
@@ -427,6 +439,10 @@ async function main() {
   // sem o gancho pra sempre. A primeira subida do servidor cobre esse caminho. Roda uma vez so
   // (marca em ~/.config/tether/hooks.json), e calado: aqui o stdout e do protocolo.
   installHooksAuto()
+  // A PROVA de que o pacote do Antigravity carrega nesta maquina: quando ELE nos sobe, o registro
+  // dele traz um carimbo no ambiente. Isto tem que vir ANTES da linha abaixo, porque e essa marca
+  // que libera a remocao do caminho antigo - e, sem ela, o antigo fica de proposito.
+  marcarPluginAtivo()
   // Mesma coisa para Gemini CLI e Antigravity. No Antigravity este e o caminho que MAIS importa:
   // e por aqui que o Trail entra na lista de ferramentas dele, porque o comando que o guia ensina
   // grava num arquivo que ele nao le. Tambem e aqui que o atalho do gatilho e consertado quando
