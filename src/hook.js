@@ -1,7 +1,8 @@
 import { basename } from 'node:path'
 import { resolveConfig } from './config.js'
-import { findTetherProject } from './tether-file.js'
+import { findTetherFile } from './tether-file.js'
 import { formatFaxina } from './memory-review.js'
+import { deTerceiro, MARCA_TERCEIRO, LEGENDA_TERCEIRO } from './procedencia.js'
 
 // Hooks de sessao do Claude Code falando com a API do Trail (mesmo desenho dos hooks do
 // repo principal, portado pro cliente standalone): "context" injeta itens abertos + MRP no
@@ -33,7 +34,11 @@ function line(i) {
   // desta lista nunca saberia que ha uma pista guardada nele - e ao salvar o trabalho a pista some,
   // sem ninguem ter lido. Espelho de linhaDeItem no tether (src/core/carona.ts).
   const marca = i.tem_carona ? ' (?)' : ''
-  return `- ${n}[${i.type}/${i.status}/${i.priority}] ${i.title} (${i.id})${marca}`
+  const base = `- ${n}[${i.type}/${i.status}/${i.priority}] ${i.title} (${i.id})${marca}`
+  // A marca de procedencia entra AQUI, no comeco da linha e antes do titulo: o titulo de um card
+  // de feedback/solicitacao e texto de terceiro, e a IA precisa saber disso antes de le-lo. So o
+  // titulo aparece na abertura - o corpo continua atras de um get_item deliberado.
+  return deTerceiro(i) ? base.replace(/^- /, `- ${MARCA_TERCEIRO} `) : base
 }
 
 // Linha explicando o sinal, so quando ha algum ponto marcado. Some sozinha no zero: nunca vira
@@ -74,9 +79,34 @@ export const STATUS_CONVENTION =
 export function formatContext(open) {
   const body = open.map(line).join('\n')
   const legenda = legendaDaCarona(open)
-  const base = `Tracker Trail deste projeto - ${open.length} item(ns) aberto(s):\n${body}\n${legenda ? `\n${legenda}\n` : ''}\nConsulte/atualize via as tools do MCP tether (list_items, get_item, update_item, get_next) conforme avancar.`
+  // A legenda da procedencia so aparece quando ha card marcado - some sozinha, como a da carona.
+  const legendaTerceiro = open.some(deTerceiro) ? LEGENDA_TERCEIRO : null
+  const base = `Tracker Trail deste projeto - ${open.length} item(ns) aberto(s):\n${body}\n${legenda ? `\n${legenda}\n` : ''}${legendaTerceiro ? `\n${legendaTerceiro}\n` : ''}\nConsulte/atualize via as tools do MCP tether (list_items, get_item, update_item, get_next) conforme avancar.`
   const withIdea = open.some((i) => i.type === 'idea') ? `${base}\n\n${IDEA_CONVENTION}` : base
   return `${withIdea}\n\n${REMINDER_CONVENTION}`
+}
+
+// F6 da auditoria: o arquivo .tether/.trail pode ter vindo junto de um repositorio clonado e
+// apontar pra QUALQUER projeto que a pessoa alcance - a sessao lia e escrevia la sem nada dizer.
+// A amarracao continua valendo (e o recurso), mas passa a ser dita em voz alta, no topo do bloco
+// de abertura. Espelho de formatAmarracao em tether/src/hooks/format.ts.
+export function formatAmarracao(a) {
+  return [
+    `[PASTA AMARRADA A OUTRO PROJETO] A pasta "${a.pasta}" esta amarrada ao projeto "${a.project}" por um arquivo em ${a.arquivo}.`,
+    `Itens, MRP e lembretes abaixo sao do projeto "${a.project}", e o que voce gravar nesta sessao cai nele - nao na pasta.`,
+    'Se o usuario nao reconhecer essa amarracao, confirme com ele antes de ler ou gravar: o arquivo pode ter vindo junto de um repositorio de terceiros.',
+  ].join('\n')
+}
+
+// Espelho de projetoAmarrado em tether/src/hooks/project.ts, sem a guarda de banco local: o
+// conector so fala com a nuvem, e runHook ja saiu antes se nao houver login. As outras duas
+// guardas repetem, de proposito, a regra que ESCOLHE o projeto: TETHER_PROJECT manda e nao
+// envolve arquivo; nome igual ao da pasta e o caso normal, nao um aviso.
+export function projetoAmarrado(cwd, arquivo) {
+  if (process.env.TETHER_PROJECT || !arquivo?.name) return null
+  const pasta = basename(cwd)
+  if (arquivo.name === pasta) return null
+  return { pasta, project: arquivo.name, arquivo: arquivo.path }
 }
 
 const TITLE_MAX = 70
@@ -209,7 +239,8 @@ export async function runHook(command, input = {}, fetchImpl = fetch) {
   const cfg = resolveConfig()
   if (!cfg.url || !cfg.token) return { exitCode: 0 }
   const cwd = input.cwd ?? process.cwd()
-  const project = process.env.TETHER_PROJECT || findTetherProject(cwd) || basename(cwd)
+  const arquivoDePasta = process.env.TETHER_PROJECT ? null : findTetherFile(cwd)
+  const project = process.env.TETHER_PROJECT || arquivoDePasta?.name || basename(cwd)
   const q = '?project=' + encodeURIComponent(project)
 
   if (command === 'context') {
@@ -223,12 +254,19 @@ export async function runHook(command, input = {}, fetchImpl = fetch) {
     // Servidor antigo (que ainda nao serve lembrete) devolve null: o bloco simplesmente nao
     // aparece, e nada mais muda.
     const avisoDeLembrete = formatLembretes(lembretes ?? [])
+    const amarracao = projetoAmarrado(cwd, arquivoDePasta)
     // Silencio total em pasta sem nada rastreado - senao poluiria todo projeto da maquina, ja
     // que com a nuvem ligada qualquer pasta responde. A convencao de status vai junto sempre que
     // o hook ja fala (inclusive em projeto so com MRP): nada mais cobra item in_progress no fim
-    // do turno.
-    if (open.length === 0 && mem.length === 0 && !avisoDeLembrete) return { exitCode: 0 }
+    // do turno. A amarracao (F6) QUEBRA esse silencio de proposito, e nao amplia o ruido: ela so
+    // existe onde ha um arquivo mandando a sessao pra um projeto de outro nome - inclusive um
+    // projeto vazio, que e justamente o caso em que a IA criaria cards no lugar errado sem
+    // ninguem ver.
+    if (open.length === 0 && mem.length === 0 && !avisoDeLembrete && !amarracao) return { exitCode: 0 }
     const parts = []
+    // O aviso de amarracao vem PRIMEIRO: ele diz de que projeto e tudo que vem depois. Embaixo
+    // da lista ja teria sido lido tarde demais.
+    if (amarracao) parts.push(formatAmarracao(amarracao))
     if (open.length > 0) parts.push(formatContext(open))
     parts.push(STATUS_CONVENTION)
     parts.push(formatMemory(mem))

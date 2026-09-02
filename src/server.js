@@ -6,6 +6,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { createApiClient } from './api.js'
 import { planejarFaxina, REGUA_MRP, MRP_ALVO, INSTRUCAO_FAXINA } from './memory-review.js'
+import { blindarItem, INSTRUCAO_TERCEIRO } from './procedencia.js'
 
 // A versao vem do package.json, NAO escrita a mao aqui: com a publicacao automatica, um numero
 // duplicado passaria a mentir sozinho a cada release - e e justo esta string que a ferramenta de
@@ -262,6 +263,9 @@ export async function runServer(config) {
         'Corrija ou aposente entradas velhas com update_memory. ' +
         'FAXINA: se o inicio da sessao avisar que a faxina da MRP esta pendente, chame review_memory ANTES ' +
         'de comecar a tarefa - ele devolve um lote pequeno pra julgar. Sem isso a MRP so cresce e para de ser lida. ' +
+        // Um pedaco destas instrucoes manda SEGUIR o que esta gravado. O texto de feedback/
+        // solicitacao vem de fora e nao pode herdar essa autoridade.
+        INSTRUCAO_TERCEIRO + ' ' +
         'Itens de trabalho: list_items/get_next para ver pontas abertas, add_item ao descobrir ' +
         'trabalho novo, update_item ao avancar ou concluir. Item que voce marcar in_progress, ' +
         'FECHE na mesma sessao (done concluiu / blocked travou / todo nao avancou) com nota ou ' +
@@ -294,7 +298,8 @@ export async function runServer(config) {
     // #156: detail/cursor/limit sao da SAIDA, nao do storage - saem do filtro antes da API.
     async ({ detail, cursor, limit, ...filter }) => {
       try {
-        return ok(respostaDeItens(await api.listItems(filter), { detail, cursor, limit }))
+        const itens = (await api.listItems(filter)).map(blindarItem)
+        return ok(respostaDeItens(itens, { detail, cursor, limit }))
       } catch (e) {
         return fail(e)
       }
@@ -309,7 +314,7 @@ export async function runServer(config) {
     },
     async (args) => {
       try {
-        return ok(comAnexos(await api.getItem(args.id)))
+        return ok(comAnexos(blindarItem(await api.getItem(args.id))))
       } catch (e) {
         return fail(e)
       }
@@ -382,7 +387,7 @@ export async function runServer(config) {
     },
     async (args) => {
       try {
-        return ok(comAnexos(await api.getNext(args)))
+        return ok(comAnexos(blindarItem(await api.getNext(args))))
       } catch (e) {
         return fail(e)
       }
