@@ -25,6 +25,11 @@ import {
   geminiSettingsPath,
   antigravityMcpPath,
   antigravityHooksPath,
+  temPluginsAntigravity,
+  instalarPluginAntigravity,
+  limparInstalacaoAntigaAntigravity,
+  estadoPluginAntigravity,
+  pluginDir,
 } from './src/outras-ias.js'
 import { runDoctor } from './src/doctor.js'
 import { espelharAmbiente } from './src/nome-legado.js'
@@ -165,12 +170,27 @@ async function main() {
       process.stdout.write(`gemini:   ${aberturaGemini[estadoGanchoGemini()]}\n`)
     }
     if (temAntigravity()) {
-      const listado = {
-        ligado: 'o Trail esta na lista de ferramentas dele',
-        ausente: 'AUSENTE da lista de ferramentas - rode: usetrail hooks install',
-        ilegivel: 'nao consegui ler a configuracao dele',
-      }[estadoMcpAntigravity()]
-      process.stdout.write(`antigravity: ${listado}; abertura ${aberturaAntigravity[estadoGanchoAntigravity()]}\n`)
+      // Com o plugin, as duas metades (ferramentas e resumo) viraram uma coisa so, e uma linha so
+      // conta a historia. A dupla de linhas antiga fica pra quem esta num Antigravity que ainda nao
+      // conhece plugin - la o caminho antigo continua sendo o que funciona.
+      const plugin = estadoPluginAntigravity()
+      if (plugin !== 'ausente') {
+        const dito = {
+          ligado: 'ligado pelo plugin do Trail (ferramentas + resumo de abertura + regras, num pacote so)',
+          'sem-resumo': 'ligado pelo plugin do Trail (ferramentas + regras); resumo de abertura AUSENTE - rode: usetrail hooks install',
+          desligado: 'o plugin do Trail esta instalado, mas DESLIGADO no painel do Antigravity - ligue por la',
+          quebrado: 'o plugin do Trail esta incompleto - rode: usetrail hooks install',
+        }[plugin]
+        process.stdout.write(`antigravity: ${dito}\n`)
+        process.stdout.write(`  (pasta do plugin: ${pluginDir()})\n`)
+      } else {
+        const listado = {
+          ligado: 'o Trail esta na lista de ferramentas dele',
+          ausente: 'AUSENTE da lista de ferramentas - rode: usetrail hooks install',
+          ilegivel: 'nao consegui ler a configuracao dele',
+        }[estadoMcpAntigravity()]
+        process.stdout.write(`antigravity: ${listado}; abertura ${aberturaAntigravity[estadoGanchoAntigravity()]}\n`)
+      }
     }
     // O silencio sobre o Antigravity e a pior resposta possivel pra quem o usa num perfil (Windows)
     // e digita o comando em outro (WSL, um container, outro usuario) - o caso do proprio dono, onde
@@ -309,7 +329,32 @@ async function main() {
         // toda mensagem, por nada. O registro do Trail na lista de ferramentas do Antigravity nao
         // tem esse problema e acontece de qualquer jeito - e ele que o guia deixa faltando hoje.
         const temCredencial = !!resolveConfig().token
-        tentar('Antigravity', () => [frase('entrou na lista de ferramentas dele', antigravityMcpPath(), registrarMcpAntigravity())].filter(Boolean))
+        // O Antigravity que conhece plugin recebe TUDO num pacote so, e o caminho antigo e limpo
+        // logo em seguida - sem isso ele subiria o Trail duas vezes. Sem o resumo quando falta a
+        // credencial: o gatilho rodaria antes de cada pensada da IA so pra descobrir que nao ha
+        // login, e o resto do pacote (ferramentas e regras) nao depende dela.
+        if (temPluginsAntigravity()) {
+          tentar('Antigravity', () => {
+            const r = instalarPluginAntigravity({ comResumo: temCredencial })
+            const linha = {
+              instalado: `plugin do Trail instalado em ${pluginDir()}`,
+              atualizado: `plugin do Trail atualizado em ${pluginDir()}`,
+              'ja-tinha': 'plugin do Trail ja estava, nada a fazer',
+              falhou: 'nao consegui escrever o plugin',
+            }[r]
+            if (r === 'instalado' || r === 'atualizado') mexeu = true
+            const limpeza = limparInstalacaoAntigaAntigravity()
+            if (limpeza === 'limpo') mexeu = true
+            return [
+              linha,
+              limpeza === 'limpo' ? 'a instalacao antiga, espalhada em tres arquivos, foi removida (backup .tether-bak ao lado)' : null,
+              limpeza === 'ilegivel' ? 'nao consegui ler a configuracao antiga dele - ela ficou onde estava' : null,
+              temCredencial ? null : 'resumo de abertura: NAO entrou ainda - falta entrar na conta (rode: usetrail login)',
+            ].filter(Boolean)
+          })
+        } else {
+          tentar('Antigravity', () => [frase('entrou na lista de ferramentas dele', antigravityMcpPath(), registrarMcpAntigravity())].filter(Boolean))
+        }
         if (!temCredencial) {
           results.push('Resumo de abertura: NAO liguei ainda - falta entrar na conta (rode: usetrail login)')
         } else {
@@ -323,13 +368,16 @@ async function main() {
           })
           // O conserto entra aqui tambem, e nao so no caminho automatico: sem ele, quem viu o
           // status dizer "registrado mas incompleto" rodava este comando, ouvia "ja estava" e
-          // continuava quebrado - o remedio anunciado nao agia.
-          tentar('Antigravity', () => {
-            const linha = frase('resumo de abertura registrado', antigravityHooksPath(), instalarGanchoAntigravity())
-            const reparo = consertarGanchoAntigravity() === 'consertado'
-            if (reparo) mexeu = true
-            return [linha, reparo ? 'resumo de abertura reparado' : null].filter(Boolean)
-          })
+          // continuava quebrado - o remedio anunciado nao agia. So no caminho antigo: onde ha
+          // plugin, o pacote inteiro ja foi escrito (e conferido) acima.
+          if (!temPluginsAntigravity()) {
+            tentar('Antigravity', () => {
+              const linha = frase('resumo de abertura registrado', antigravityHooksPath(), instalarGanchoAntigravity())
+              const reparo = consertarGanchoAntigravity() === 'consertado'
+              if (reparo) mexeu = true
+              return [linha, reparo ? 'resumo de abertura reparado' : null].filter(Boolean)
+            })
+          }
         }
         if (mexeu) results.push('Feche e abra a sua IA para valer.')
         else results.push('Nada precisou mudar.')

@@ -21,7 +21,7 @@ const casas = []
 // comAntigravity: a maquina tem o Antigravity (o sinal e a subpasta de configuracao dele).
 // As duas moram em ~/.gemini de proposito, porque e assim na vida real - e e justamente por isso
 // que a pasta sozinha nao serve pra reconhecer nenhum dos dois.
-function casaNova({ comClaude = true, settings = undefined, comGemini = false, comAntigravity = false, geminiSettings = undefined, mcpConfig = undefined, agHooks = undefined, comCredencial = true } = {}) {
+function casaNova({ comClaude = true, settings = undefined, comGemini = false, comAntigravity = false, comPlugins = false, agConfig = undefined, geminiSettings = undefined, mcpConfig = undefined, agHooks = undefined, comCredencial = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'trail-gancho-'))
   casas.push(dir)
   process.env.HOME = dir
@@ -45,10 +45,15 @@ function casaNova({ comClaude = true, settings = undefined, comGemini = false, c
     mkdirSync(join(dir, '.gemini'), { recursive: true })
     writeFileSync(join(dir, '.gemini', 'settings.json'), geminiSettings ?? '{}')
   }
-  if (comAntigravity || mcpConfig !== undefined || agHooks !== undefined) {
+  if (comAntigravity || comPlugins || mcpConfig !== undefined || agHooks !== undefined || agConfig !== undefined) {
     mkdirSync(join(dir, '.gemini', 'config'), { recursive: true })
     if (mcpConfig !== undefined) writeFileSync(join(dir, '.gemini', 'config', 'mcp_config.json'), mcpConfig)
     if (agHooks !== undefined) writeFileSync(join(dir, '.gemini', 'config', 'hooks.json'), agHooks)
+    if (agConfig !== undefined) writeFileSync(join(dir, '.gemini', 'config', 'config.json'), agConfig)
+    // A pasta de plugins e criada pelo PROPRIO Antigravity, que ja nasce com os plugins dele
+    // dentro. Por isso ela e o sinal de que aquela versao conhece plugin - e por isso a casa que
+    // NAO pede comPlugins representa um Antigravity mais velho, onde o caminho antigo e o unico.
+    if (comPlugins) mkdirSync(join(dir, '.gemini', 'config', 'plugins'), { recursive: true })
   }
   return dir
 }
@@ -1023,6 +1028,166 @@ console.log('\nOs comandos que a pessoa digita\n')
   checa('configuracao estragada numa IA nao impede a outra', inst.status === 0 && inst.stdout.includes('ilegivel') && inst.stdout.includes('lista de ferramentas'), inst.stdout + inst.stderr)
   const desl = cli('hooks', 'uninstall')
   checa('e desligar avisa que nao mexeu na estragada, em vez de dizer que nao achou nada', desl.stdout.includes('ilegivel'), desl.stdout)
+}
+
+// ---------------------------------------------------------------------------
+// #273 - o Trail como plugin do Antigravity (um pacote so)
+// ---------------------------------------------------------------------------
+
+console.log('\nO Trail como plugin do Antigravity\n')
+
+const arquivosDoPlugin = (pdir) => ['plugin.json', 'mcp_config.json', 'hooks.json', 'hook.mjs', join('rules', 'AGENTS.md')].filter((f) => existsSync(join(pdir, f)))
+
+{
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  const { instalarOutrasIAsAuto, pluginDir, estadoPluginAntigravity } = await outras()
+  const r = instalarOutrasIAsAuto()
+  const p = pluginDir()
+  checa('maquina nova: o pacote inteiro entra de uma vez', r.plugin === 'instalado' && arquivosDoPlugin(p).length === 5, `${r.plugin}: ${arquivosDoPlugin(p).join(', ')}`)
+  checa('e o estado dele e ligado', estadoPluginAntigravity() === 'ligado', estadoPluginAntigravity())
+  // A queixa que criou este item: as regras de conduta nao chegavam ao modelo. Agora elas viajam
+  // DENTRO do pacote - e a primeira frase delas diz quando calar, porque ficam ligadas o tempo todo.
+  const regras = readFileSync(join(p, 'rules', 'AGENTS.md'), 'utf8')
+  checa('as regras de conduta viajam dentro do pacote', regras.includes('in_progress') && regras.includes('list_memory'), regras.slice(0, 80))
+  checa('e a primeira frase delas diz quando NAO se aplicam', regras.split('\n').slice(0, 5).join(' ').includes('valem quando a pasta aberta tem um projeto'), regras.slice(0, 200))
+  checa('nada foi escrito nos arquivos globais do Antigravity', !existsSync(join(dir, '.gemini', 'config', 'mcp_config.json')) && !existsSync(join(dir, '.gemini', 'config', 'hooks.json')))
+  // Escrever no arquivo de regras GLOBAL da pessoa valeria pra TODOS os projetos dela, inclusive os
+  // que nada tem a ver com o Trail. E escrever no config.json seria o conector ligando o proprio
+  // plugin por cima da escolha dela.
+  checa('e nem no arquivo de regras global dela, nem no config.json', !existsSync(join(dir, '.gemini', 'GEMINI.md')) && !existsSync(join(dir, '.gemini', 'AGENTS.md')) && !existsSync(join(dir, '.gemini', 'config', 'config.json')))
+}
+
+{
+  // A MIGRACAO. Quem ja estava no caminho antigo nao pode terminar com os dois: seriam duas copias
+  // das mesmas ferramentas na lista da pessoa e o resumo de abertura disparando em dobro.
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  let m = await outras()
+  m.registrarMcpAntigravity()
+  m.instalarGanchoAntigravity()
+  const atalhoVelho = m.atalhoPath()
+  m = await outras()
+  const r = m.instalarOutrasIAsAuto()
+  const mcpGlobal = lerJson(join(dir, '.gemini', 'config', 'mcp_config.json'))
+  const hooksGlobal = lerJson(join(dir, '.gemini', 'config', 'hooks.json'))
+  checa('migra quem estava no caminho antigo', r.plugin === 'instalado' && r.limpeza === 'limpo', `${r.plugin} / ${r.limpeza}`)
+  checa('e o Trail nao fica registrado duas vezes', Object.keys(mcpGlobal?.mcpServers ?? {}).length === 0 && JSON.stringify(hooksGlobal) === '{}', `${JSON.stringify(mcpGlobal)} ${JSON.stringify(hooksGlobal)}`)
+  checa('o atalho velho sai do lugar antigo', !existsSync(atalhoVelho))
+  checa('e o novo esta dentro do pacote', existsSync(join(m.pluginDir(), 'hook.mjs')))
+  checa('sobrou copia de seguranca dos arquivos que mexemos', existsSync(join(dir, '.gemini', 'config', 'mcp_config.json.tether-bak')))
+}
+
+{
+  // A limpeza so pode tirar o que e NOSSO. Servidor e gatilho que a pessoa configurou ficam.
+  const dir = casaNova({
+    comClaude: false,
+    comPlugins: true,
+    mcpConfig: JSON.stringify({ mcpServers: { outro: { command: 'node', args: ['dele.js'] } } }),
+    agHooks: JSON.stringify({ dela: { PreInvocation: [{ type: 'command', command: 'echo oi' }] } }),
+  })
+  const { instalarOutrasIAsAuto } = await outras()
+  instalarOutrasIAsAuto()
+  const mcpGlobal = lerJson(join(dir, '.gemini', 'config', 'mcp_config.json'))
+  const hooksGlobal = lerJson(join(dir, '.gemini', 'config', 'hooks.json'))
+  checa('a limpeza nao encosta no que e da pessoa', !!mcpGlobal?.mcpServers?.outro && !!hooksGlobal?.dela, `${JSON.stringify(mcpGlobal)} ${JSON.stringify(hooksGlobal)}`)
+}
+
+{
+  // Antigravity mais velho, que nao conhece plugin: o caminho antigo continua sendo o unico, e nada
+  // de pacote. O contrario - escrever o pacote la - desligaria em silencio o que ja funcionava.
+  const dir = casaNova({ comClaude: false, comAntigravity: true })
+  const { instalarOutrasIAsAuto, pluginDir } = await outras()
+  const r = instalarOutrasIAsAuto()
+  checa('Antigravity que nao conhece plugin fica no caminho antigo', r.mcp === 'registrado' && r.antigravity === 'instalado' && !existsSync(pluginDir()), JSON.stringify(r))
+  checa('e o arquivo global dele foi escrito, como antes', existsSync(join(dir, '.gemini', 'config', 'hooks.json')))
+}
+
+{
+  // Quem removeu o resumo de proposito nao pode ve-lo voltar pela migracao. As ferramentas e as
+  // regras ficam: "tira o resumo" nunca quis dizer "desliga o Trail".
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  let m = await outras()
+  m.instalarOutrasIAsAuto()
+  m.desinstalarOutrasIAs()
+  m = await outras()
+  m.instalarOutrasIAsAuto()
+  const p = m.pluginDir()
+  checa('resumo removido de proposito nao volta sozinho', !existsSync(join(p, 'hook.mjs')) && !existsSync(join(p, 'hooks.json')), arquivosDoPlugin(p).join(', '))
+  checa('mas as ferramentas e as regras continuam la', existsSync(join(p, 'mcp_config.json')) && existsSync(join(p, 'rules', 'AGENTS.md')))
+  checa('e o status conta isso, em vez de dizer que esta tudo ligado', m.estadoPluginAntigravity() === 'sem-resumo', m.estadoPluginAntigravity())
+  void dir
+}
+
+{
+  // Plugin desligado no painel do Antigravity: a escolha da pessoa vale, e o status precisa dizer
+  // "desligado" em vez de "ligado" - garantir que esta on pra quem desligou e o pior dos dois erros.
+  casaNova({ comClaude: false, comPlugins: true, agConfig: JSON.stringify({ plugins: { trail: { enabled: false } } }) })
+  const { instalarOutrasIAsAuto, estadoPluginAntigravity } = await outras()
+  instalarOutrasIAsAuto()
+  checa('plugin desligado no painel aparece como desligado', estadoPluginAntigravity() === 'desligado', estadoPluginAntigravity())
+}
+
+{
+  // Pacote com o atalho apagado e PIOR do que ausente: parece instalado e nao fala nada. O conserto
+  // roda fora do portao da marca, senao ele ficaria morto pra sempre.
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  let m = await outras()
+  m.instalarOutrasIAsAuto()
+  rmSync(join(m.pluginDir(), 'hook.mjs'))
+  checa('pacote sem o atalho aparece como quebrado', m.estadoPluginAntigravity() === 'quebrado', m.estadoPluginAntigravity())
+  m = await outras()
+  const r = m.instalarOutrasIAsAuto()
+  checa('e a proxima abertura conserta sozinha', r.plugin === 'atualizado' && m.estadoPluginAntigravity() === 'ligado', `${r.plugin} / ${m.estadoPluginAntigravity()}`)
+  void dir
+}
+
+{
+  // O atalho DE DENTRO DO PACOTE rodando de verdade, com um conector de mentira no lugar do npx.
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  const { instalarOutrasIAsAuto, pluginDir } = await outras()
+  instalarOutrasIAsAuto()
+  const binFalso = join(dir, 'binfalso')
+  mkdirSync(binFalso, { recursive: true })
+  const stub = join(binFalso, 'npx')
+  writeFileSync(stub, '#!/bin/sh\ncat > /dev/null\nprintf \'%s\' \'{"injectSteps":[{"userMessage":"RESUMO-DE-MENTIRA"}]}\'\n')
+  chmodSync(stub, 0o755)
+  const rodar = (entrada) =>
+    spawnSync(process.execPath, [join(pluginDir(), 'hook.mjs')], {
+      input: JSON.stringify(entrada),
+      encoding: 'utf8',
+      env: { ...process.env, TRAIL_ATALHO_NPX: stub, HOME: dir, XDG_CONFIG_HOME: join(dir, '.config') },
+    }).stdout
+  const a = rodar({ conversationId: 'c1', workspacePaths: ['/x'] })
+  const b = rodar({ conversationId: 'c1', workspacePaths: ['/x'] })
+  checa('o atalho de dentro do pacote fala uma vez por conversa', a.includes('RESUMO-DE-MENTIRA') && b.trim() === '{}', `${a} / ${b}`)
+  // As marcas de conversa moram FORA do pacote de proposito: e o que impede o resumo de chegar de
+  // novo, no meio da conversa, em quem acabou de migrar do caminho antigo.
+  checa('e a marca da conversa fica fora do pacote, na pasta do conector', existsSync(join(dir, '.config', 'trail', 'antigravity-conversas')) && !existsSync(join(pluginDir(), 'antigravity-conversas')))
+}
+
+{
+  // A MIGRACAO NAO PODE REPETIR O RESUMO. Conversa que ja tinha sido saudada pelo atalho antigo
+  // continua saudada depois do pacote entrar - senao quem migra no meio de uma conversa recebe o
+  // resumo inteiro de novo, do nada.
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  let m = await outras()
+  m.registrarMcpAntigravity()
+  m.instalarGanchoAntigravity()
+  const binFalso = join(dir, 'binfalso')
+  mkdirSync(binFalso, { recursive: true })
+  const stub = join(binFalso, 'npx')
+  writeFileSync(stub, '#!/bin/sh\ncat > /dev/null\nprintf \'%s\' \'{"injectSteps":[{"userMessage":"RESUMO-DE-MENTIRA"}]}\'\n')
+  chmodSync(stub, 0o755)
+  const rodar = (caminho) =>
+    spawnSync(process.execPath, [caminho], {
+      input: JSON.stringify({ conversationId: 'em-andamento', workspacePaths: ['/x'] }),
+      encoding: 'utf8',
+      env: { ...process.env, TRAIL_ATALHO_NPX: stub, HOME: dir, XDG_CONFIG_HOME: join(dir, '.config') },
+    }).stdout
+  const antes = rodar(m.atalhoPath())
+  m = await outras()
+  m.instalarOutrasIAsAuto()
+  const depois = rodar(join(m.pluginDir(), 'hook.mjs'))
+  checa('quem migra no meio de uma conversa nao recebe o resumo de novo', antes.includes('RESUMO-DE-MENTIRA') && depois.trim() === '{}', `${antes} / ${depois}`)
 }
 
 for (const d of casas) rmSync(d, { recursive: true, force: true })
