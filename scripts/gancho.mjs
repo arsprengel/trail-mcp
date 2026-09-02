@@ -700,8 +700,40 @@ console.log('\nO atalho do Antigravity rodando de verdade\n')
   const cmd = ganchoAg(dir).trail.PreInvocation[0].command
   const estado = estadoGanchoAntigravity()
   Object.defineProperty(process, 'platform', orig)
-  checa('no Windows o comando sai com o par de aspas externo', cmd.startsWith('""') && cmd.endsWith('""'), cmd)
-  checa('e o status continua sabendo ler o Node de dentro dele', estado === 'ligado', estado)
+  // O par de aspas EXTERNO nao pode voltar. A regra do interpretador do Windows (apagar a primeira
+  // e a ultima aspa quando ha mais de duas) e real, mas quem envelopa a linha e o proprio
+  // Antigravity - um par nosso a mais deixava uma aspa colada no caminho do Node e o Windows
+  // respondia que o programa nao existe. Custou uma versao publicada; nao volte.
+  checa('no Windows o comando NAO leva par de aspas externo', !cmd.startsWith('""'), cmd)
+  checa('e cada caminho vai entre aspas, um por vez', /^"[^"]+" "[^"]+"$/.test(cmd), cmd)
+  checa('o status continua sabendo ler o Node de dentro dele', estado === 'ligado', estado)
+}
+
+{
+  // Quem instalou na versao com o par a mais tem um comando que NUNCA roda. Como o Node gravado
+  // existe, o conserto por "esta morto" nao pegaria - a maquina ficaria quebrada pra sempre.
+  const dir = casaNova({ comClaude: false, comAntigravity: true })
+  const { instalarGanchoAntigravity, consertarGanchoAntigravity, atalhoPath } = await outras()
+  instalarGanchoAntigravity()
+  const p = join(dir, '.gemini', 'config', 'hooks.json')
+  const cfg = lerJson(p)
+  cfg.trail.PreInvocation[0].command = `""${process.execPath}" "${atalhoPath()}""`
+  writeFileSync(p, JSON.stringify(cfg, null, 2))
+  const r = consertarGanchoAntigravity()
+  const agora = lerJson(p).trail.PreInvocation[0].command
+  checa('a forma antiga, com o par a mais, e consertada sozinha', r === 'consertado' && !agora.startsWith('""'), `devolveu ${r}: ${agora}`)
+}
+
+{
+  // O caminho do npx tambem passa pelo interpretador no Windows, e a instalacao padrao do Node fica
+  // numa pasta com espaco no nome. Sem aspas, o Windows tenta rodar so o pedaco antes do espaco.
+  const dir = casaNova({ comClaude: false, comAntigravity: true })
+  const { instalarGanchoAntigravity, atalhoPath } = await outras()
+  instalarGanchoAntigravity()
+  const fonte = readFileSync(atalhoPath(), 'utf8')
+  checa('no Windows o atalho poe o caminho do npx entre aspas', /win32.*'"' \+ ao_lado \+ '"'/.test(fonte))
+  checa('e fora do Windows nao poe (la nao ha interpretador no meio)', fonte.includes(": ao_lado"))
+  void dir
 }
 
 {
@@ -838,6 +870,28 @@ console.log('\nO atalho do Antigravity rodando de verdade\n')
   rodar(quebrado, 'deu-erro')
   const depois = existsSync(pasta) ? readdirSync(pasta) : []
   checa('conector que nao conseguiu responder: a conversa continua podendo receber depois', depois.length === 1, JSON.stringify(depois))
+}
+
+{
+  // O QUE DECIDE E A RESPOSTA, NAO O CODIGO DE SAIDA. No Windows com Node 24 o npm quebra na
+  // propria arrumacao final, DEPOIS de o resumo ja ter sido escrito - e sair pelo codigo jogava
+  // fora um resumo perfeito, deixando a pessoa sem nada.
+  const dir = casaNova({ comClaude: false, comAntigravity: true })
+  const { instalarGanchoAntigravity, atalhoPath } = await outras()
+  instalarGanchoAntigravity()
+  const binFalso = join(dir, 'binfalso')
+  mkdirSync(binFalso, { recursive: true })
+  const stub = join(binFalso, 'npx')
+  writeFileSync(stub, '#!/bin/sh\ncat > /dev/null\nprintf \'%s\' \'{"injectSteps":[{"userMessage":"R"}]}\'\nexit 7\n')
+  chmodSync(stub, 0o755)
+  const r = spawnSync(process.execPath, [atalhoPath()], {
+    input: JSON.stringify({ conversationId: 'c', workspacePaths: ['/x'] }),
+    encoding: 'utf8',
+    env: { ...process.env, TRAIL_ATALHO_NPX: stub, HOME: dir, XDG_CONFIG_HOME: join(dir, '.config') },
+  })
+  checa('resumo escrito antes de o processo morrer feio: o resumo vale', r.stdout.includes('"R"'), r.stdout)
+  const marcas = readdirSync(join(dir, '.config', 'trail', 'antigravity-conversas'))
+  checa('e a conversa fica marcada, sem repetir na pensada seguinte', marcas.length === 1, JSON.stringify(marcas))
 }
 
 {

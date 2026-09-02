@@ -20,8 +20,8 @@ npx -y usetrail@latest login
 claude mcp add trail -s user -- npx -y usetrail@latest
 ```
 
-No account yet? Create one at [usetrail.dev](https://usetrail.dev) - the free plan covers one
-project and three people.
+No account yet? Create one at [usetrail.dev](https://usetrail.dev) - the free plan covers three
+projects and three people.
 
 **Not tied to one agent.** This is a plain MCP server over stdio, speaking the three protocol
 versions in use today. Any MCP-compatible client can run it; only the registration command

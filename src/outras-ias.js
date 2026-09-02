@@ -28,7 +28,7 @@ const LIMITE_GANCHO_S = 25
 
 // Carimbo do atalho. Sobe quando o CONTEUDO do atalho muda - e so isso destrava a reescrita nas
 // maquinas que ja tem a versao anterior instalada.
-export const VERSAO_ATALHO = 1
+export const VERSAO_ATALHO = 2
 
 export function geminiDir() {
   return join(homedir(), '.gemini')
@@ -378,7 +378,11 @@ function acharNpx() {
   // sem tocar a rede - na vida real ninguem define isso.
   if (process.env.TRAIL_ATALHO_NPX) return process.env.TRAIL_ATALHO_NPX
   const ao_lado = join(dirname(process.execPath), process.platform === 'win32' ? 'npx.cmd' : 'npx')
-  return existsSync(ao_lado) ? ao_lado : 'npx'
+  if (!existsSync(ao_lado)) return 'npx'
+  // No Windows a chamada passa pelo interpretador de linha, e ele recebe o caminho e os argumentos
+  // colados sem escapar nada. A instalacao padrao do Node fica numa pasta com espaco no nome, entao
+  // sem as aspas o Windows tenta rodar so o pedaco antes do espaco e responde que nao existe.
+  return process.platform === 'win32' ? '"' + ao_lado + '"' : ao_lado
 }
 
 async function main() {
@@ -436,17 +440,22 @@ async function main() {
   // resolve). A falha de escrita chega DEPOIS, como evento, e sem este ouvinte ela virava erro nao
   // tratado: o gatilho morria alto, com rastro de pilha, dentro do laco da IA do cliente.
   filho.stdin.on('error', () => sai('{}', true))
-  filho.on('close', (codigo) => {
+  filho.on('close', () => {
     const texto = Buffer.concat(saida).toString('utf8')
-    // Saida que nao e JSON nao pode ser repassada: o Antigravity le stdout como o resultado do
-    // gatilho, e texto solto ali seria erro na cara da pessoa.
+    // O QUE DECIDE E A RESPOSTA, NAO O CODIGO DE SAIDA. Se veio um JSON de verdade, o conector
+    // respondeu - e a resposta vale mesmo que o processo morra feio depois de imprimi-la. Isso
+    // acontece de verdade: no Windows com Node 24, o npm quebra na propria arrumacao final, depois
+    // do resumo ja escrito, e sair pelo codigo jogava fora um resumo perfeito. Saida que nao e JSON
+    // nao pode ser repassada de jeito nenhum: o Antigravity le isso como o resultado do gatilho, e
+    // texto solto ali vira erro na cara da pessoa.
+    let resposta = null
     try {
-      JSON.parse(texto)
+      const v = JSON.parse(texto)
+      if (v && typeof v === 'object' && !Array.isArray(v)) resposta = texto
     } catch {
-      return sai('{}', true)
+      /* nao e JSON: cai no silencio abaixo */
     }
-    if (codigo !== 0) return sai('{}', true)
-    return sai(texto)
+    return resposta ? sai(resposta) : sai('{}', true)
   })
   try {
     filho.stdin.end(cru)
@@ -461,16 +470,15 @@ main().catch(() => sai('{}', true))
 // O caminho ABSOLUTO do Node em uso, e nao a palavra "node": o interpretador que roda o gancho no
 // Windows pode nao ter o Node no caminho do sistema.
 //
-// O PAR DE ASPAS EXTERNO NO WINDOWS NAO E ENFEITE - sem ele NADA funciona la. O gancho e executado
-// por interpretador de linha de comando, e a regra dele e: havendo mais de duas aspas na linha,
-// ele APAGA a primeira e a ultima. Com dois caminhos entre aspas sao quatro, entao a linha chega
-// no sistema partida e o comando morre - em qualquer caminho, com ou sem espaco. Envolvendo tudo
-// num par a mais, e esse par que e comido e o resto chega inteiro. (Conferido rodando no Windows
-// desta maquina: sem o par externo, "'C:\\Program' nao e reconhecido"; com ele, devolve o vazio
-// esperado.) O gancho do Claude Code escapa disso por sorte: o comando dele comeca sem aspas.
+// SEM PAR DE ASPAS EXTERNO, e isso ja foi errado uma vez. A regra do interpretador do Windows
+// (havendo mais de duas aspas na linha, ele apaga a primeira e a ultima) e real, mas quem paga por
+// ela e QUEM ENVELOPA a linha - e o proprio Antigravity ja envelopa, chamando o interpretador com o
+// comando inteiro entre aspas. Acrescentar um par nosso fazia sobrar uma aspa colada no caminho do
+// Node e o Windows respondia que o programa nao existe. Provado na maquina do dono em 02/09/2026,
+// com o Antigravity de verdade - o teste sintetico que pedia o par a mais nao reproduzia o
+// envelope que o Antigravity poe por fora.
 function comandoDoAtalho() {
-  const base = `"${process.execPath}" "${atalhoPath()}"`
-  return process.platform === 'win32' ? `"${base}"` : base
+  return `"${process.execPath}" "${atalhoPath()}"`
 }
 
 function atalhoDesatualizado() {
@@ -569,10 +577,12 @@ export function consertarGanchoAntigravity() {
       escreverAtalho()
       mudou = true
     }
-    // So reescreve o comando quando ele esta MORTO (Node gravado sumiu). Reescrever sempre que
-    // diferisse do Node de agora faria o arquivo ser regravado a cada abertura em quem tem
-    // gerenciador de versao - sem necessidade nenhuma, ja que os dois Nodes funcionam.
-    if (!existsSync(nodeGravado(nosso.h.command) ?? '')) {
+    // Reescreve o comando em dois casos: quando ele esta MORTO (o Node gravado sumiu) e quando
+    // ficou na forma antiga, com um par de aspas a mais em volta - essa forma nunca roda no
+    // Windows, e as maquinas que instalaram entre 01 e 02/09/2026 ficaram com ela gravada.
+    // Comparar com o Node de AGORA seria errado: quem tem gerenciador de versao tem varios Nodes
+    // validos, e o arquivo da pessoa seria regravado a cada abertura sem necessidade.
+    if (!existsSync(nodeGravado(nosso.h.command) ?? '') || String(nosso.h.command).startsWith('""')) {
       nosso.h.command = comandoDoAtalho()
       gravar(path, cfg, lido.estado === 'ok')
       mudou = true
