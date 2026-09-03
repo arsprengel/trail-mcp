@@ -344,6 +344,8 @@ async function main() {
         if (temPluginsAntigravity()) {
           tentar('Antigravity', () => {
             const r = instalarPluginAntigravity({ comResumo: temCredencial })
+            // Desligado: o pacote nao e escrito e o caminho antigo, comprovado, atende sozinho.
+            if (r === 'desligado') return []
             const linha = {
               instalado: `plugin do Trail instalado em ${pluginDir()}`,
               atualizado: `plugin do Trail atualizado em ${pluginDir()}`,

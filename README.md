@@ -76,19 +76,14 @@ Each tool keeps this in its own place, so the connector writes to the one that t
 
 - **Claude Code** - a session-start hook in `~/.claude/settings.json`.
 - **Gemini CLI** - a session-start hook in `~/.gemini/settings.json`.
-- **Antigravity** - it ships as a **plugin**: one folder in `~/.gemini/config/plugins/trail/`
-  holding the MCP server, the opening summary and the working rules, loaded and switched off as a
-  unit from Antigravity's own plugin panel. It has no session-start event, so the summary rides the
-  closest one and speaks only once per conversation, through a tiny shortcut that keeps the other
-  turns cheap. Note that **`gemini mcp add` does not connect Trail in Antigravity** - that command
-  writes to `~/.gemini/settings.json`, and Antigravity reads its own files. Machines set up before
-  the plugin are migrated on the next run, and the old scattered entries are removed, so Trail is
-  never registered twice. An Antigravity too old to know about plugins keeps the previous layout.
-
-  The plugin never writes to your own `GEMINI.md`/`AGENTS.md` - those apply to every project you
-  open, including the ones that have nothing to do with Trail - and it never pre-approves its own
-  tools in Antigravity's permission list. The first approval prompt is where you find out an agent
-  is about to write to your tracker; that prompt stays.
+- **Antigravity** - the tools are registered in `~/.gemini/config/mcp_config.json`, which is the
+  file it actually reads: **`gemini mcp add` does not connect Trail in Antigravity**, because that
+  command writes to `~/.gemini/settings.json` instead. Field-tested on Antigravity 2.11 (Windows),
+  of the three things that live in that config folder only the tool registration is honored - the
+  opening-summary hook is not run, and a plugin folder placed exactly where its own documentation
+  says is not read. So on Antigravity the agent gets the tools and the server's working rules, and
+  fetches the project summary itself on the first turn instead of receiving it. The plugin path is
+  built and tested behind a switch, waiting for that to change.
 
 `usetrail status` tells you, per tool found on this machine, whether it is on - so you never have
 to go digging through settings files to find out.

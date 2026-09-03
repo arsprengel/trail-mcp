@@ -690,6 +690,23 @@ export function estadoGanchoAntigravity() {
 // reescrita nas maquinas que ja tem a versao anterior.
 export const VERSAO_PLUGIN = 2
 
+// O PACOTE ESTA DESLIGADO POR PADRAO desde 03/09/2026, e o motivo e teste de campo, nao gosto.
+// Na maquina do dono (Antigravity 2.11.0, Windows) o pacote foi escrito na pasta EXATA que a
+// documentacao do proprio Antigravity manda, ele foi reaberto varias vezes, e nada: nao aparece na
+// lista de plugins, nao sobe o servidor dele e nao roda o gatilho. O gatilho de abertura registrado
+// do jeito antigo tambem nao roda. Das tres coisas que moram naquela pasta de configuracao, so o
+// registro das ferramentas e respeitado.
+//
+// Enquanto isso nao se explicar, escrever o pacote so deixa lixo na maquina de quem instala: uma
+// pasta que ninguem le e um segundo registro que nunca se limpa (a limpeza espera uma prova que
+// nunca chega). O caminho antigo, sozinho, e o que esta comprovado funcionando.
+//
+// O codigo inteiro fica de pe e testado atras desta chave - o dia que der pra descobrir o que
+// aquele programa exige, e so ligar. Ver o ponto #273.
+function pacoteLigado() {
+  return process.env.TRAIL_PLUGIN_ANTIGRAVITY === '1'
+}
+
 export function antigravityPluginsDir() {
   return join(antigravityDir(), 'plugins')
 }
@@ -784,8 +801,9 @@ function carimboAtual(comResumo) {
   return `${VERSAO_PLUGIN}${comResumo ? ' +resumo' : ''}\n`
 }
 
-//   'instalado' | 'atualizado' | 'ja-tinha' | 'sem-antigravity' | 'sem-plugins' | 'falhou'
+//   'instalado' | 'atualizado' | 'ja-tinha' | 'desligado' | 'sem-antigravity' | 'sem-plugins' | 'falhou'
 export function instalarPluginAntigravity({ comResumo = true } = {}) {
+  if (!pacoteLigado()) return 'desligado'
   if (!temAntigravity()) return 'sem-antigravity'
   if (!temPluginsAntigravity()) return 'sem-plugins'
   const tinha = existsSync(pluginDir())
@@ -968,7 +986,7 @@ export function instalarOutrasIAsAuto() {
   r.gemini = passo('gemini', () => instalarGanchoGemini())
   // O Antigravity que conhece plugin recebe o pacote; o que nao conhece continua no caminho antigo,
   // que segue funcionando. Nunca os dois: seria o Trail subindo duas vezes na maquina da pessoa.
-  if (temPluginsAntigravity()) Object.assign(r, autoPluginAntigravity(passo))
+  if (pacoteLigado() && temPluginsAntigravity()) Object.assign(r, autoPluginAntigravity(passo))
   else {
     r.mcp = passo('antigravity-mcp', () => registrarMcpAntigravity())
     r.antigravity = passo('antigravity', () => instalarGanchoAntigravity())

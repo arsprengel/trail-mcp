@@ -1036,6 +1036,20 @@ console.log('\nOs comandos que a pessoa digita\n')
 
 console.log('\nO Trail como plugin do Antigravity\n')
 
+{
+  // O PADRAO E DESLIGADO, e isso e o mais importante desta secao inteira. O teste de campo de
+  // 03/09/2026 mostrou o Antigravity ignorando o pacote na pasta que a documentacao dele manda; ate
+  // isso se explicar, escrever o pacote so deixa lixo na maquina de quem instala.
+  const dir = casaNova({ comClaude: false, comPlugins: true })
+  const { instalarOutrasIAsAuto, pluginDir } = await outras()
+  const r = instalarOutrasIAsAuto()
+  checa('sem a chave ligada, o pacote NAO e escrito', !existsSync(pluginDir()) && r.plugin === undefined, JSON.stringify(r))
+  checa('e a maquina recebe o caminho comprovado, sozinho', r.mcp === 'registrado' && r.antigravity === 'instalado' && existsSync(join(dir, '.gemini', 'config', 'hooks.json')), JSON.stringify(r))
+}
+
+// Daqui pra baixo, o pacote LIGADO - o codigo continua de pe e provado atras da chave.
+process.env.TRAIL_PLUGIN_ANTIGRAVITY = '1'
+
 const arquivosDoPlugin = (pdir) => ['plugin.json', 'mcp_config.json', 'hooks.json', 'hook.mjs', join('rules', 'AGENTS.md')].filter((f) => existsSync(join(pdir, f)))
 
 {
@@ -1207,6 +1221,8 @@ const arquivosDoPlugin = (pdir) => ['plugin.json', 'mcp_config.json', 'hooks.jso
   const depois = rodar(join(m.pluginDir(), 'hook.mjs'))
   checa('quem migra no meio de uma conversa nao recebe o resumo de novo', antes.includes('RESUMO-DE-MENTIRA') && depois.trim() === '{}', `${antes} / ${depois}`)
 }
+
+delete process.env.TRAIL_PLUGIN_ANTIGRAVITY
 
 for (const d of casas) rmSync(d, { recursive: true, force: true })
 console.log(falhas ? `\n${falhas} falha(s)\n` : '\nTudo passou\n')
