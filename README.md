@@ -52,8 +52,9 @@ The durable knowledge of a project: the deploy that has a trap in it, the decisi
 relitigate, the command that is not in any README. Shared by everyone on the project, human or
 agent. A new session reads it before acting instead of rediscovering it.
 
-**Reminders** - `add_reminder`, `list_reminders`. Things with a date that must not be silently
-missed.
+**Reminders** - `add_reminder`, `list_reminders`, `update_reminder`, `delete_reminder`. Things with
+a date that must not be silently missed - and the agent closes or reschedules them itself once the
+date arrives.
 
 **Attachments** - `add_attachment`, `get_attachment`. Files that belong to an item.
 

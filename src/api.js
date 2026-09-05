@@ -112,6 +112,15 @@ export function createApiClient({ url, token, project }, fetchImpl = fetch) {
       const body = { project, ...input } // project da pasta; input.project (se houver) sobrescreve
       return jsonOrThrow(await req('POST', '/api/reminders', body), 'add_reminder')
     },
+    async updateReminder(id, patch = {}) {
+      return jsonOrThrow(await req('PATCH', `/api/reminders/${id}`, patch), 'update_reminder')
+    },
+    async deleteReminder(id) {
+      const r = await req('DELETE', `/api/reminders/${id}`)
+      if (r.status === 404) return false
+      await jsonOrThrow(r, 'delete_reminder')
+      return true
+    },
     // Anexos (#72): mesmos endpoints do dashboard. addAttachment manda o arquivo em base64 no
     // corpo JSON (a rota tambem aceita multipart, mas o MCP nao tem File - so base64).
     async addAttachment(itemId, input = {}) {

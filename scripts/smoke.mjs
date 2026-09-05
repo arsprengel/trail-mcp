@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PKG = JSON.parse(readFileSync(join(RAIZ, 'package.json'), 'utf8'))
-const TOOLS_ESPERADAS = ['add_item', 'list_items', 'get_next', 'list_memory', 'get_memory', 'add_memory']
+const TOOLS_ESPERADAS = ['add_item', 'list_items', 'get_next', 'list_memory', 'get_memory', 'add_memory', 'add_reminder', 'update_reminder', 'delete_reminder']
 
 let temp = null
 let falhas = 0
@@ -167,6 +167,15 @@ async function main() {
     const nomes = lista.map((t) => t.name)
     for (const t of TOOLS_ESPERADAS) precisa(nomes.includes(t), `faltou a ferramenta "${t}"`)
     console.log(`       (${nomes.length} ferramentas)`)
+
+    // O texto que o conector injeta na abertura da sessao MANDA a IA chamar tool pelo nome. Se ele
+    // citar uma que o servidor nao registra, a IA obedece, bate na parede e a pessoa fica sem saida
+    // - foi exatamente assim que o lembrete vencido ficou sem como fechar ate 05/09/2026.
+    const { formatLembretes } = await import(join(RAIZ, 'src/hook.js'))
+    const aviso = formatLembretes([{ id: 'rem_1', project: 'p', message: 'x', remind_at: Date.now() - 1000, status: 'pending' }]) ?? ''
+    const citadas = [...aviso.matchAll(/\b([a-z]+_[a-z_]+)\(/g)].map((m) => m[1])
+    precisa(citadas.length > 0, 'o aviso de lembrete vencido nao citou nenhuma ferramenta')
+    for (const t of citadas) precisa(nomes.includes(t), `o aviso de abertura manda chamar "${t}", que o servidor nao registra`)
   })
 
   rmSync(tarball, { force: true })

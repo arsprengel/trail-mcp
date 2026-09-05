@@ -52,6 +52,13 @@ const MemoryPatch = z.object({
   archived: z.boolean().optional(),
 })
 const ReminderStatus = z.enum(['pending', 'done', 'dismissed'])
+const ReminderPatch = z.object({
+  message: z.string().min(1).optional(),
+  // O servidor aceita ISO 8601 ou ms epoch; aqui e so o que a IA escreve naturalmente.
+  remind_at: z.union([z.string(), z.number()]).optional(),
+  status: ReminderStatus.optional(),
+  item_id: z.string().nullable().optional(),
+})
 
 function ok(data) {
   return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
@@ -272,7 +279,9 @@ export async function runServer(config) {
         'link de evidencia: nada cobra isso no fim da conversa, e item esquecido em in_progress ' +
         'fica mentindo no tracker pra equipe inteira. ' +
         'Lembretes: se prometer avisar algo numa data futura, registre com add_reminder (o Trail ' +
-        'guarda e mostra no dashboard, ja que a sessao nao fica aberta pra lembrar); list_reminders ve os pendentes.',
+        'guarda e mostra no dashboard, ja que a sessao nao fica aberta pra lembrar); list_reminders ve os pendentes. ' +
+        'Ao tratar um lembrete vencido, FECHE (update_reminder com status done) ou REMARQUE (remind_at novo) - ' +
+        'vencido que ninguem fecha volta em toda abertura de sessao e vira ruido que o usuario para de ler.',
     },
   )
   const scoped = ` Default: projeto "${config.project}" (a pasta aberta); passe project so para outro.`
@@ -554,7 +563,7 @@ export async function runServer(config) {
   server.registerTool(
     'list_reminders',
     {
-      description: 'Lista os lembretes/agendamentos do projeto (pendentes por padrao; ordenados por data). Chame pra conferir o que ja foi agendado.' + scoped,
+      description: 'Lista os lembretes/agendamentos do projeto, ordenados por data. Sem status vem TUDO (inclusive os ja fechados); passe status="pending" pra ver so o que ainda esta de pe. Chame pra conferir o que ja foi agendado.' + scoped,
       inputSchema: {
         project: z.string().optional(),
         status: ReminderStatus.optional(),
@@ -563,6 +572,43 @@ export async function runServer(config) {
     async (args) => {
       try {
         return ok(await api.listReminders(args))
+      } catch (e) {
+        return fail(e)
+      }
+    },
+  )
+
+  server.registerTool(
+    'update_reminder',
+    {
+      description:
+        'Muda um lembrete existente: FECHA ele (status done quando o assunto ja foi resolvido, ' +
+        'dismissed quando nao vale mais), ADIA (remind_at novo) ou corrige a mensagem. Chame ' +
+        'sempre que tratar um lembrete vencido - lembrete que ninguem fecha volta em toda abertura ' +
+        'de sessao e vira ruido. Adiar tambem faz o aviso do vencimento sair de novo na data nova.',
+      inputSchema: { id: z.string(), patch: ReminderPatch },
+    },
+    async (args) => {
+      try {
+        return ok(await api.updateReminder(args.id, args.patch))
+      } catch (e) {
+        return fail(e)
+      }
+    },
+  )
+
+  server.registerTool(
+    'delete_reminder',
+    {
+      description: 'Apaga um lembrete de vez. Use so quando ele foi criado por engano ou com o ' +
+        'projeto errado; pra encerrar um lembrete que cumpriu o papel, prefira update_reminder ' +
+        'com status done (fica no historico). Irreversivel.',
+      inputSchema: { id: z.string() },
+    },
+    async (args) => {
+      try {
+        const deleted = await api.deleteReminder(args.id)
+        return ok({ deleted, id: args.id })
       } catch (e) {
         return fail(e)
       }
