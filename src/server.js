@@ -244,7 +244,7 @@ function cortarCorpo(e, teto) {
 export async function runServer(config) {
   if (!config.url || !config.token) {
     process.stderr.write(
-      '[trail] ainda nao conectado - rode: npx -y usetrail@latest login\n',
+      '[trail] not connected yet - run: npx -y usetrail@latest login\n',
     )
   }
   const api = createApiClient(config)
