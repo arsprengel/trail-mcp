@@ -4,6 +4,7 @@ import { existsSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resolveConfig, clearSaved, readSaved, URL_HOSPEDADA } from './src/config.js'
+import { idioma, t } from './src/idioma.js'
 import { runServer } from './src/server.js'
 import { runLogin } from './src/login.js'
 import { runHook, envelopeAntigravity } from './src/hook.js'
@@ -97,9 +98,9 @@ async function main() {
     // hoje ficava sem o resumo automatico e nem sabia que existia um.
     const gancho = installHooksAuto()
     if (gancho === 'instalado') {
-      process.stdout.write('Resumo do projeto no inicio da conversa: ligado. Feche e abra o Claude pra valer.\n')
+      process.stdout.write(t('Resumo do projeto no inicio da conversa: ligado. Feche e abra o Claude pra valer.\n', 'Project summary at the start of a conversation: on. Restart Claude for it to take effect.\n'))
     } else if (gancho === 'falhou') {
-      process.stdout.write('(nao consegui ligar o resumo automatico de abertura; rode: usetrail hooks install)\n')
+      process.stdout.write(t('(nao consegui ligar o resumo automatico de abertura; rode: usetrail hooks install)\n', '(could not turn on the automatic opening summary; run: usetrail hooks install)\n'))
     }
     // As outras IAs seguem o mesmo caminho, com uma diferenca que vale ouro no Antigravity: alem do
     // resumo de abertura, e AQUI que o Trail entra na lista de ferramentas dele. O comando que o
@@ -107,26 +108,26 @@ async function main() {
     // arquivo, e sem esta linha a pessoa termina o guia achando que ligou.
     const outras = instalarOutrasIAsAuto()
     if (outras.mcp === 'registrado') {
-      process.stdout.write('Antigravity encontrado: o Trail entrou na lista de ferramentas dele.\n')
+      process.stdout.write(t('Antigravity encontrado: o Trail entrou na lista de ferramentas dele.\n', 'Antigravity found: Trail is now in its tool list.\n'))
     }
     if (outras.gemini === 'instalado' || outras.antigravity === 'instalado') {
-      process.stdout.write('Resumo do projeto no inicio da conversa: ligado tambem na sua outra IA.\n')
+      process.stdout.write(t('Resumo do projeto no inicio da conversa: ligado tambem na sua outra IA.\n', 'Project summary at the start of a conversation: on for your other AI too.\n'))
     }
     // O QUE DEU ERRADO TEM QUE APARECER AQUI. Sem estas linhas, um registro que falhou por
     // configuracao quebrada saia calado, a pessoa lia so a frase afirmativa acima e fechava o
     // terminal achando que tinha terminado - que e exatamente o defeito que este trabalho corrige.
     for (const [oque, r] of [
-      ['a lista de ferramentas do Antigravity', outras.mcp],
-      ['o resumo de abertura do Gemini', outras.gemini],
-      ['o resumo de abertura do Antigravity', outras.antigravity],
+      [t('a lista de ferramentas do Antigravity', "Antigravity's tool list"), outras.mcp],
+      [t('o resumo de abertura do Gemini', "Gemini's opening summary"), outras.gemini],
+      [t('o resumo de abertura do Antigravity', "Antigravity's opening summary"), outras.antigravity],
     ]) {
-      if (r === 'ilegivel') process.stdout.write(`(nao mexi em ${oque}: a configuracao dessa IA esta ilegivel e eu nao sobrescrevo)\n`)
-      else if (r === 'falhou') process.stdout.write(`(nao consegui ligar ${oque}; rode: usetrail hooks install)\n`)
+      if (r === 'ilegivel') process.stdout.write(t(`(nao mexi em ${oque}: a configuracao dessa IA esta ilegivel e eu nao sobrescrevo)\n`, `(left ${oque} alone: that AI's configuration is unreadable and I do not overwrite it)\n`))
+      else if (r === 'falhou') process.stdout.write(t(`(nao consegui ligar ${oque}; rode: usetrail hooks install)\n`, `(could not turn on ${oque}; run: usetrail hooks install)\n`))
     }
     // Sem esta linha, quem so tem Antigravity pedia algo na hora, nao encontrava ferramenta
     // nenhuma e concluia que nao tinha funcionado. So o Claude Code tinha esse aviso.
     if (outras.mcp === 'registrado' || outras.gemini === 'instalado' || outras.antigravity === 'instalado') {
-      process.stdout.write('Feche e abra a sua IA para valer.\n')
+      process.stdout.write(t('Feche e abra a sua IA para valer.\n', 'Restart your AI for this to take effect.\n'))
     }
     return
   }
@@ -136,38 +137,38 @@ async function main() {
     process.exit(runDoctor(process.argv[3]))
   }
   if (cmd === 'logout') {
-    process.stdout.write(clearSaved() ? 'Token removido.\n' : 'Nenhum token salvo.\n')
+    process.stdout.write(clearSaved() ? t('Token removido.\n', 'Token removed.\n') : t('Nenhum token salvo.\n', 'No token saved.\n'))
     return
   }
   if (cmd === 'status') {
     const cfg = resolveConfig()
     process.stdout.write(`url:     ${cfg.url}\n`)
     process.stdout.write(`project: ${cfg.project}\n`)
-    process.stdout.write(`token:   ${cfg.token ? 'presente' : 'AUSENTE (rode: usetrail login)'}\n`)
+    process.stdout.write(`token:   ${cfg.token ? t('presente', 'present') : t('AUSENTE (rode: usetrail login)', 'MISSING (run: usetrail login)')}\n`)
     // O resumo do projeto na abertura da conversa. Responder isto aqui e o que evita a caca de
     // sete comandos que a IA faz quando alguem pergunta "o gancho esta configurado?".
     const gancho = {
-      ligado: 'ligado (o resumo do projeto entra sozinho quando a conversa abre)',
-      ausente: 'AUSENTE (rode: usetrail hooks install)',
-      'sem-claude': 'nao se aplica - Claude Code nao encontrado nesta maquina',
-      ilegivel: 'nao consegui ler a configuracao do Claude Code',
+      ligado: t('ligado (o resumo do projeto entra sozinho quando a conversa abre)', 'on (the project summary comes in on its own when a conversation opens)'),
+      ausente: t('AUSENTE (rode: usetrail hooks install)', 'MISSING (run: usetrail hooks install)'),
+      'sem-claude': t('nao se aplica - Claude Code nao encontrado nesta maquina', 'not applicable - Claude Code not found on this machine'),
+      ilegivel: t('nao consegui ler a configuracao do Claude Code', "could not read Claude Code's configuration"),
     }[estadoDoGancho()]
-    process.stdout.write(`abertura: ${gancho}\n`)
+    process.stdout.write(`${t('abertura', 'opening')}: ${gancho}\n`)
     // Uma linha por IA ENCONTRADA nesta maquina. IA que a pessoa nao tem nao vira linha: o status
     // existe pra responder de primeira, e lista de programa ausente e ruido.
     const abertura = (ligadoTexto) => ({
       ligado: ligadoTexto,
-      ausente: 'AUSENTE (rode: usetrail hooks install)',
-      quebrado: 'registrado mas incompleto - rode: usetrail hooks install',
-      desligado: 'registrado, mas desligado na configuracao dessa IA',
-      ilegivel: 'nao consegui ler a configuracao dessa IA',
+      ausente: t('AUSENTE (rode: usetrail hooks install)', 'MISSING (run: usetrail hooks install)'),
+      quebrado: t('registrado mas incompleto - rode: usetrail hooks install', 'registered but incomplete - run: usetrail hooks install'),
+      desligado: t('registrado, mas desligado na configuracao dessa IA', "registered, but switched off in that AI's configuration"),
+      ilegivel: t('nao consegui ler a configuracao dessa IA', "could not read that AI's configuration"),
     })
     // A ressalva da pasta confiavel e SO do Gemini CLI: ele so roda gancho em pasta que a pessoa
     // marcou como confiavel (ele pergunta na primeira vez que abre ali). Repetir isso na linha do
     // Antigravity seria inventar uma regra que ele nao tem - e este trabalho inteiro nasceu de uma
     // frase que afirmava algo que nao era verdade.
-    const aberturaGemini = abertura('ligado (entra sozinho na abertura, nas pastas que voce marcou como confiaveis no Gemini)')
-    const aberturaAntigravity = abertura('ligado (o resumo entra sozinho na abertura da conversa)')
+    const aberturaGemini = abertura(t('ligado (entra sozinho na abertura, nas pastas que voce marcou como confiaveis no Gemini)', 'on (comes in on its own at the opening, in the folders you marked as trusted in Gemini)'))
+    const aberturaAntigravity = abertura(t('ligado (o resumo entra sozinho na abertura da conversa)', 'on (the summary comes in on its own when a conversation opens)'))
     if (temGeminiCli({ olharPath: true })) {
       process.stdout.write(`gemini:   ${aberturaGemini[estadoGanchoGemini()]}\n`)
     }
@@ -178,26 +179,26 @@ async function main() {
       const plugin = estadoPluginAntigravity()
       if (plugin !== 'ausente') {
         const dito = {
-          ligado: 'ligado pelo plugin do Trail (ferramentas + resumo de abertura + regras, num pacote so)',
-          'sem-resumo': 'ligado pelo plugin do Trail (ferramentas + regras); resumo de abertura AUSENTE - rode: usetrail hooks install',
-          desligado: 'o plugin do Trail esta instalado, mas DESLIGADO no painel do Antigravity - ligue por la',
-          quebrado: 'o plugin do Trail esta incompleto - rode: usetrail hooks install',
+          ligado: t('ligado pelo plugin do Trail (ferramentas + resumo de abertura + regras, num pacote so)', "on through Trail's plugin (tools + opening summary + rules, in one package)"),
+          'sem-resumo': t('ligado pelo plugin do Trail (ferramentas + regras); resumo de abertura AUSENTE - rode: usetrail hooks install', "on through Trail's plugin (tools + rules); opening summary MISSING - run: usetrail hooks install"),
+          desligado: t('o plugin do Trail esta instalado, mas DESLIGADO no painel do Antigravity - ligue por la', "Trail's plugin is installed, but SWITCHED OFF in Antigravity's panel - turn it on there"),
+          quebrado: t('o plugin do Trail esta incompleto - rode: usetrail hooks install', "Trail's plugin is incomplete - run: usetrail hooks install"),
         }[plugin]
         process.stdout.write(`antigravity: ${dito}\n`)
-        process.stdout.write(`  (pasta do plugin: ${pluginDir()})\n`)
+        process.stdout.write(t(`  (pasta do plugin: ${pluginDir()})\n`, `  (plugin folder: ${pluginDir()})\n`))
         // Enquanto nao ha prova, as duas instalacoes convivem de proposito - e o status tem que
         // dizer isso, senao a pessoa que ve o Trail duplicado na lista de ferramentas acha que e bug.
         if (!pluginJaCarregou()) {
-          process.stdout.write('  (o registro antigo continua ligado ate o Antigravity subir o Trail pelo pacote uma vez;\n')
-          process.stdout.write('   ate la voce pode ver o Trail duas vezes na lista de ferramentas dele, e some sozinho)\n')
+          process.stdout.write(t('  (o registro antigo continua ligado ate o Antigravity subir o Trail pelo pacote uma vez;\n', '  (the old registration stays on until Antigravity starts Trail through the package once;\n'))
+          process.stdout.write(t('   ate la voce pode ver o Trail duas vezes na lista de ferramentas dele, e some sozinho)\n', '   until then you may see Trail twice in its tool list, and it clears on its own)\n'))
         }
       } else {
         const listado = {
-          ligado: 'o Trail esta na lista de ferramentas dele',
-          ausente: 'AUSENTE da lista de ferramentas - rode: usetrail hooks install',
-          ilegivel: 'nao consegui ler a configuracao dele',
+          ligado: t('o Trail esta na lista de ferramentas dele', 'Trail is in its tool list'),
+          ausente: t('AUSENTE da lista de ferramentas - rode: usetrail hooks install', 'MISSING from the tool list - run: usetrail hooks install'),
+          ilegivel: t('nao consegui ler a configuracao dele', 'could not read its configuration'),
         }[estadoMcpAntigravity()]
-        process.stdout.write(`antigravity: ${listado}; abertura ${aberturaAntigravity[estadoGanchoAntigravity()]}\n`)
+        process.stdout.write(`antigravity: ${listado}; ${t('abertura', 'opening')} ${aberturaAntigravity[estadoGanchoAntigravity()]}\n`)
       }
     }
     // O silencio sobre o Antigravity e a pior resposta possivel pra quem o usa num perfil (Windows)
@@ -206,8 +207,8 @@ async function main() {
     // foi encontrado, e nao so quando nenhuma das duas aparece. Dizendo ONDE se procurou, a pessoa
     // reconhece o proprio caso.
     if (!temAntigravity()) {
-      process.stdout.write(`antigravity: nao encontrado em ${antigravityDir()}\n`)
-      process.stdout.write('  (usa Antigravity em outro perfil, como Windows ao lado do WSL? rode este comando de la)\n')
+      process.stdout.write(t(`antigravity: nao encontrado em ${antigravityDir()}\n`, `antigravity: not found in ${antigravityDir()}\n`))
+      process.stdout.write(t('  (usa Antigravity em outro perfil, como Windows ao lado do WSL? rode este comando de la)\n', '  (using Antigravity under another profile, such as Windows next to WSL? run this command from there)\n'))
     }
     return
   }
@@ -292,11 +293,11 @@ async function main() {
       if (sub === 'install' && !claude && !gemini && !antigravity && !forcar) {
         process.stdout.write(
           [
-            'Nenhuma IA compativel encontrada nesta maquina - nada foi criado.',
-            'O resumo de abertura hoje existe para Claude Code, Gemini CLI e Antigravity.',
-            'Acabou de instalar o Claude Code e ele ainda nao rodou? Repita com --forcar.',
-            '(As outras duas criam a pasta de configuracao delas na primeira vez que abrem;',
-            ' abra a sua uma vez e rode isto de novo.)',
+            t('Nenhuma IA compativel encontrada nesta maquina - nada foi criado.', 'No compatible AI found on this machine - nothing was created.'),
+            t('O resumo de abertura hoje existe para Claude Code, Gemini CLI e Antigravity.', 'The opening summary today exists for Claude Code, Gemini CLI and Antigravity.'),
+            t('Acabou de instalar o Claude Code e ele ainda nao rodou? Repita com --forcar.', 'Just installed Claude Code and it has not run yet? Repeat with --forcar.'),
+            t('(As outras duas criam a pasta de configuracao delas na primeira vez que abrem;', '(The other two create their configuration folder the first time they open;'),
+            t(' abra a sua uma vez e rode isto de novo.)', ' open yours once and run this again.)'),
             '',
           ].join('\n'),
         )
@@ -310,12 +311,12 @@ async function main() {
         try {
           for (const r of fn()) results.push(rotulo ? `${rotulo} - ${r}` : r)
         } catch (e) {
-          results.push(`${rotulo} - falhou, e a configuracao ficou intacta: ${e instanceof Error ? e.message : String(e)}`)
+          results.push(t(`${rotulo} - falhou, e a configuracao ficou intacta: ${e instanceof Error ? e.message : String(e)}`, `${rotulo} - failed, and the configuration was left untouched: ${e instanceof Error ? e.message : String(e)}`))
         }
       }
       if (sub === 'install') {
         if (claude || forcar) {
-          tentar('Claude Code', () => [...installHooks(), `arquivo: ${settingsPath()} (backup .tether-bak ao lado)`])
+          tentar('Claude Code', () => [...installHooks(), t(`arquivo: ${settingsPath()} (backup .tether-bak ao lado)`, `file: ${settingsPath()} (.tether-bak backup alongside)`)])
         }
         // As respostas 'sem-gemini'/'sem-antigravity' nao viram linha: IA que a pessoa nao tem nao
         // precisa aparecer no relatorio de uma instalacao.
@@ -325,9 +326,13 @@ async function main() {
         const frase = (feito, arquivo, r) => {
           if (r === 'instalado' || r === 'registrado') {
             mexeu = true
-            return `${feito} em ${arquivo} (backup .tether-bak ao lado)`
+            return t(`${feito} em ${arquivo} (backup .tether-bak ao lado)`, `${feito} in ${arquivo} (.tether-bak backup alongside)`)
           }
-          return { 'ja-tinha': 'ja estava, nada a fazer', ilegivel: 'configuracao ilegivel: NADA foi escrito', falhou: 'nao consegui escrever' }[r]
+          return {
+            'ja-tinha': t('ja estava, nada a fazer', 'already there, nothing to do'),
+            ilegivel: t('configuracao ilegivel: NADA foi escrito', 'unreadable configuration: NOTHING was written'),
+            falhou: t('nao consegui escrever', 'could not write'),
+          }[r]
         }
         // O arquivo entra na frase de cada IA porque cada uma guarda isso num lugar diferente - e
         // era justamente por nao saber ONDE olhar que este trabalho existe.
@@ -347,38 +352,38 @@ async function main() {
             // Desligado: o pacote nao e escrito e o caminho antigo, comprovado, atende sozinho.
             if (r === 'desligado') return []
             const linha = {
-              instalado: `plugin do Trail instalado em ${pluginDir()}`,
-              atualizado: `plugin do Trail atualizado em ${pluginDir()}`,
-              'ja-tinha': 'plugin do Trail ja estava, nada a fazer',
-              falhou: 'nao consegui escrever o plugin',
+              instalado: t(`plugin do Trail instalado em ${pluginDir()}`, `Trail plugin installed in ${pluginDir()}`),
+              atualizado: t(`plugin do Trail atualizado em ${pluginDir()}`, `Trail plugin updated in ${pluginDir()}`),
+              'ja-tinha': t('plugin do Trail ja estava, nada a fazer', 'Trail plugin was already there, nothing to do'),
+              falhou: t('nao consegui escrever o plugin', 'could not write the plugin'),
             }[r]
             if (r === 'instalado' || r === 'atualizado') mexeu = true
             const limpeza = limparInstalacaoAntigaAntigravity()
             if (limpeza === 'limpo') mexeu = true
             return [
               linha,
-              limpeza === 'limpo' ? 'a instalacao antiga, espalhada em tres arquivos, foi removida (backup .tether-bak ao lado)' : null,
-              limpeza === 'esperando-prova' ? 'o registro antigo FICA ate o Antigravity subir o Trail pelo pacote pelo menos uma vez - assim voce nao fica sem Trail se ele ignorar o pacote' : null,
-              limpeza === 'ilegivel' ? 'nao consegui ler a configuracao antiga dele - ela ficou onde estava' : null,
-              temCredencial ? null : 'resumo de abertura: NAO entrou ainda - falta entrar na conta (rode: usetrail login)',
+              limpeza === 'limpo' ? t('a instalacao antiga, espalhada em tres arquivos, foi removida (backup .tether-bak ao lado)', 'the old installation, spread across three files, was removed (.tether-bak backup alongside)') : null,
+              limpeza === 'esperando-prova' ? t('o registro antigo FICA ate o Antigravity subir o Trail pelo pacote pelo menos uma vez - assim voce nao fica sem Trail se ele ignorar o pacote', 'the old registration STAYS until Antigravity starts Trail through the package at least once - that way you are not left without Trail if it ignores the package') : null,
+              limpeza === 'ilegivel' ? t('nao consegui ler a configuracao antiga dele - ela ficou onde estava', 'could not read its old configuration - it was left where it was') : null,
+              temCredencial ? null : t('resumo de abertura: NAO entrou ainda - falta entrar na conta (rode: usetrail login)', 'opening summary: NOT in yet - you still need to sign in (run: usetrail login)'),
             ].filter(Boolean)
           })
         }
         // Sem a prova de que o pacote carrega, o caminho antigo tambem e escrito: e ele que
         // sustenta o Trail nessa maquina ate o pacote se provar (ou nao).
         if (!temPluginsAntigravity() || !pluginJaCarregou()) {
-          tentar('Antigravity', () => [frase('entrou na lista de ferramentas dele', antigravityMcpPath(), registrarMcpAntigravity())].filter(Boolean))
+          tentar('Antigravity', () => [frase(t('entrou na lista de ferramentas dele', 'added to its tool list'), antigravityMcpPath(), registrarMcpAntigravity())].filter(Boolean))
         }
         if (!temCredencial) {
-          results.push('Resumo de abertura: NAO liguei ainda - falta entrar na conta (rode: usetrail login)')
+          results.push(t('Resumo de abertura: NAO liguei ainda - falta entrar na conta (rode: usetrail login)', 'Opening summary: NOT turned on yet - you still need to sign in (run: usetrail login)'))
         } else {
           tentar('Gemini CLI', () => {
             const existia = existsSync(geminiSettingsPath())
-            const linha = frase('resumo de abertura registrado', geminiSettingsPath(), instalarGanchoGemini({ olharPath: true }))
+            const linha = frase(t('resumo de abertura registrado', 'opening summary registered'), geminiSettingsPath(), instalarGanchoGemini({ olharPath: true }))
             // Transparencia: se o arquivo nao existia, o comando ACABOU de cria-lo. Numa maquina
             // onde o Gemini CLI foi achado so pelo programa no caminho do sistema (por exemplo, o
             // do Windows visto de dentro do WSL), a pessoa precisa saber que apareceu arquivo novo.
-            return [linha, !existia && existsSync(geminiSettingsPath()) ? 'esse arquivo nao existia e foi criado agora' : null].filter(Boolean)
+            return [linha, !existia && existsSync(geminiSettingsPath()) ? t('esse arquivo nao existia e foi criado agora', 'that file did not exist and was just created') : null].filter(Boolean)
           })
           // O conserto entra aqui tambem, e nao so no caminho automatico: sem ele, quem viu o
           // status dizer "registrado mas incompleto" rodava este comando, ouvia "ja estava" e
@@ -386,52 +391,78 @@ async function main() {
           // plugin, o pacote inteiro ja foi escrito (e conferido) acima.
           if (!temPluginsAntigravity() || !pluginJaCarregou()) {
             tentar('Antigravity', () => {
-              const linha = frase('resumo de abertura registrado', antigravityHooksPath(), instalarGanchoAntigravity())
+              const linha = frase(t('resumo de abertura registrado', 'opening summary registered'), antigravityHooksPath(), instalarGanchoAntigravity())
               const reparo = consertarGanchoAntigravity() === 'consertado'
               if (reparo) mexeu = true
-              return [linha, reparo ? 'resumo de abertura reparado' : null].filter(Boolean)
+              return [linha, reparo ? t('resumo de abertura reparado', 'opening summary repaired') : null].filter(Boolean)
             })
           }
         }
-        if (mexeu) results.push('Feche e abra a sua IA para valer.')
-        else results.push('Nada precisou mudar.')
+        if (mexeu) results.push(t('Feche e abra a sua IA para valer.', 'Restart your AI for this to take effect.'))
+        else results.push(t('Nada precisou mudar.', 'Nothing needed to change.'))
       } else {
         tentar('Claude Code', () => uninstallHooks())
         tentar('', () => {
           const r = desinstalarOutrasIAs()
-          return r.length ? r : ['Gemini CLI / Antigravity: nada do Trail encontrado']
+          return r.length ? r : [t('Gemini CLI / Antigravity: nada do Trail encontrado', 'Gemini CLI / Antigravity: nothing from Trail found')]
         })
       }
       process.stdout.write(results.map((r) => `  ${r}`).join('\n') + '\n')
       return
     }
-    process.stderr.write('uso: usetrail hooks <install|uninstall>\n')
+    process.stderr.write(t('uso: usetrail hooks <install|uninstall>\n', 'usage: usetrail hooks <install|uninstall>\n'))
     process.exit(1)
   }
   if (cmd === '--help' || cmd === '-h' || cmd === 'help') {
     process.stdout.write(
-      [
-        'usetrail - o conector do Trail',
-        '',
-        'Uso:',
-        '  usetrail            sobe o servidor MCP (stdio) - e o que a sua IA usa',
-        '  usetrail login      conecta esta maquina ao Trail (login pelo site)',
-        '  usetrail logout     apaga o token salvo',
-        '  usetrail status     mostra url, projeto, se ha token e, para cada IA encontrada nesta',
-        '                        maquina, se ela esta ligada e se o resumo de abertura esta ligado',
-        '  usetrail doctor     acha a instalacao nesta maquina, diz a versao e destrava a',
-        '                        atualizacao automatica quando ela parou (aceita um caminho)',
-        '  usetrail hooks install|uninstall   registra/remove o resumo de abertura de conversa',
-        '                        (tracker + MRP no contexto desde a primeira mensagem) em cada IA',
-        '                        encontrada aqui - Claude Code, Gemini CLI e Antigravity. No',
-        '                        Antigravity tambem poe o Trail na lista de ferramentas dele. O',
-        '                        login ja faz sozinho - isto e pra quem removeu e quer de volta',
-        '',
-        'Env: TRAIL_API_URL (so para Trail proprio; sem ela o login vai para o servico hospedado),',
-        '     TRAIL_PROJECT (default = nome da pasta atual).',
-        '     Os nomes antigos (TETHER_*) continuam valendo, sem prazo pra acabar.',
-        '',
-      ].join('\n'),
+      (idioma === 'pt'
+        ? [
+            'usetrail - o conector do Trail',
+            '',
+            'Uso:',
+            '  usetrail            sobe o servidor MCP (stdio) - e o que a sua IA usa',
+            '  usetrail login      conecta esta maquina ao Trail (login pelo site)',
+            '  usetrail logout     apaga o token salvo',
+            '  usetrail status     mostra url, projeto, se ha token e, para cada IA encontrada nesta',
+            '                        maquina, se ela esta ligada e se o resumo de abertura esta ligado',
+            '  usetrail doctor     acha a instalacao nesta maquina, diz a versao e destrava a',
+            '                        atualizacao automatica quando ela parou (aceita um caminho)',
+            '  usetrail hooks install|uninstall   registra/remove o resumo de abertura de conversa',
+            '                        (tracker + MRP no contexto desde a primeira mensagem) em cada IA',
+            '                        encontrada aqui - Claude Code, Gemini CLI e Antigravity. No',
+            '                        Antigravity tambem poe o Trail na lista de ferramentas dele. O',
+            '                        login ja faz sozinho - isto e pra quem removeu e quer de volta',
+            '',
+            'Env: TRAIL_API_URL (so para Trail proprio; sem ela o login vai para o servico hospedado),',
+            '     TRAIL_PROJECT (default = nome da pasta atual),',
+            '     TRAIL_LANG (pt ou en; sem ela, a lingua do sistema, e ingles quando ele nao diz).',
+            '     Os nomes antigos (TETHER_*) continuam valendo, sem prazo pra acabar.',
+            '',
+          ]
+        : [
+            'usetrail - the Trail connector',
+            '',
+            'Usage:',
+            '  usetrail            starts the MCP server (stdio) - this is what your AI runs',
+            '  usetrail login      connects this machine to Trail (sign in through the site)',
+            '  usetrail logout     deletes the saved token',
+            '  usetrail status     shows url, project, whether a token is present and, for each AI',
+            '                        found here, whether it is wired up and the opening summary is on',
+            '  usetrail doctor     finds the installation on this machine, reports its version and',
+            '                        unblocks the automatic update when it stalled (takes a path)',
+            '  usetrail hooks install|uninstall   registers/removes the conversation opening summary',
+            '                        (tracker + project memory in context from the first message) in',
+            '                        every AI found here - Claude Code, Gemini CLI and Antigravity.',
+            '                        On Antigravity it also puts Trail in its tool list. Signing in',
+            '                        already does this - use it if you removed it and want it back',
+            '',
+            'Env: TRAIL_API_URL (self-hosted Trail only; without it, login goes to the hosted service),',
+            '     TRAIL_PROJECT (default = name of the current folder),',
+            '     TRAIL_LANG (pt or en; without it, the system language, and English when it says none).',
+            '     The old names (TETHER_*) still work, with no end date.',
+            '',
+          ]
+      ).join('\n'),
     )
     return
   }

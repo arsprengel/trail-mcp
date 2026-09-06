@@ -1046,7 +1046,7 @@ export function desinstalarOutrasIAs() {
     typeof c === 'string' && (c.includes('bin.js" hook ') || new RegExp(`${PACOTE}(@[^\\s]*)?\\s+hook\\s`).test(c))
   const geminiLido = lerJson(geminiSettingsPath())
   if (geminiLido.estado === 'ilegivel') {
-    results.push('Gemini CLI: configuracao ilegivel - NAO removi nada dela')
+    results.push(t('Gemini CLI: configuracao ilegivel - NAO removi nada dela', 'Gemini CLI: unreadable configuration - I removed NOTHING from it'))
   }
   if (geminiLido.estado === 'ok') {
     const grupos = geminiLido.valor.hooks?.SessionStart
@@ -1055,7 +1055,7 @@ export function desinstalarOutrasIAs() {
       geminiLido.valor.hooks.SessionStart = grupos.filter((g) => !(g.hooks ?? []).some((h) => nossoComando(h?.command)))
       if (geminiLido.valor.hooks.SessionStart.length !== antes) {
         gravar(geminiSettingsPath(), geminiLido.valor, true)
-        results.push('Gemini CLI: resumo de abertura removido')
+        results.push(t('Gemini CLI: resumo de abertura removido', 'Gemini CLI: opening summary removed'))
       }
     }
   }
@@ -1064,7 +1064,7 @@ export function desinstalarOutrasIAs() {
   // logo abaixo deixaria um gatilho registrado apontando pra um arquivo que nao existe mais -
   // disparando em toda pensada da IA, sem ninguem saber por que.
   if (agLido.estado === 'ilegivel') {
-    results.push('Antigravity: configuracao ilegivel - NAO removi nada, e o atalho fica onde esta')
+    results.push(t('Antigravity: configuracao ilegivel - NAO removi nada, e o atalho fica onde esta', 'Antigravity: unreadable configuration - I removed NOTHING, and the shortcut stays where it is'))
     marcar('gemini')
     return results
   }
@@ -1083,7 +1083,7 @@ export function desinstalarOutrasIAs() {
     }
     if (mexeu) {
       gravar(antigravityHooksPath(), cfg, true)
-      results.push('Antigravity: resumo de abertura removido')
+      results.push(t('Antigravity: resumo de abertura removido', 'Antigravity: opening summary removed'))
     }
   }
   // No plugin, "tirar o resumo de abertura" e tirar o gatilho de dentro dele - e SO isso. O
@@ -1107,7 +1107,7 @@ export function desinstalarOutrasIAs() {
       } catch {
         /* carimbo desatualizado so faz a proxima abertura reescrever o pacote */
       }
-      results.push('Antigravity: resumo de abertura removido do plugin')
+      results.push(t('Antigravity: resumo de abertura removido do plugin', 'Antigravity: opening summary removed from the plugin'))
     }
   }
   for (const p of [atalhoPath(), pastaMarcasConversas()]) {

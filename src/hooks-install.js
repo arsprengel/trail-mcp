@@ -124,10 +124,10 @@ export function installHooks() {
   const command = comandoDoGancho()
   settings.hooks[event] = settings.hooks[event] ?? []
   if (grupoTemGanchoDoTrail(settings.hooks[event], 'context')) {
-    results.push(`${event}: ja havia um gancho do Trail (mantido, nada a fazer)`)
+    results.push(t(`${event}: ja havia um gancho do Trail (mantido, nada a fazer)`, `${event}: a Trail hook was already there (kept, nothing to do)`))
   } else {
     settings.hooks[event].push({ hooks: [{ type: 'command', command }] })
-    results.push(`${event}: registrado (${command})`)
+    results.push(t(`${event}: registrado (${command})`, `${event}: registered (${command})`))
   }
   const stop = settings.hooks.Stop
   if (Array.isArray(stop)) {
@@ -136,7 +136,7 @@ export function installHooks() {
     // palavra "tether" estar no caminho: quem clonou numa pasta de outro nome tambem limpa.
     const isReconcile = (c) => typeof c === 'string' && /\breconcile\b/.test(c) && (/tether|trail/i.test(c) || c.includes('hook reconcile'))
     settings.hooks.Stop = stop.filter((g) => !(g.hooks ?? []).some((h) => isReconcile(h.command)))
-    if (settings.hooks.Stop.length !== before) results.push('Stop: removido (nao existe mais)')
+    if (settings.hooks.Stop.length !== before) results.push(t('Stop: removido (nao existe mais)', 'Stop: removed (no longer exists)'))
   }
   writeFileSync(path, JSON.stringify(settings, null, 2) + '\n')
   return results
@@ -170,7 +170,7 @@ export function installHooksAuto() {
 
 export function uninstallHooks() {
   const path = settingsPath()
-  if (!existsSync(path)) return ['settings.json nao existe - nada a remover']
+  if (!existsSync(path)) return [t('settings.json nao existe - nada a remover', 'settings.json does not exist - nothing to remove')]
   const settings = JSON.parse(readFileSync(path, 'utf8'))
   copyFileSync(path, path + '.tether-bak')
   const results = []
@@ -183,10 +183,10 @@ export function uninstallHooks() {
     if (!Array.isArray(groups)) continue
     const before = groups.length
     settings.hooks[event] = groups.filter((g) => !(g.hooks ?? []).some((h) => nosso(h.command)))
-    if (settings.hooks[event].length !== before) results.push(`${event}: removido`)
+    if (settings.hooks[event].length !== before) results.push(t(`${event}: removido`, `${event}: removed`))
   }
   writeFileSync(path, JSON.stringify(settings, null, 2) + '\n')
   // Marca a passagem: quem removeu de proposito nao pode ver o gancho voltar sozinho depois.
   marcarQueTentou()
-  return results.length ? results : ['nenhum gancho do Trail encontrado']
+  return results.length ? results : [t('nenhum gancho do Trail encontrado', 'no Trail hook found')]
 }

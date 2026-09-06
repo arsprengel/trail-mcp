@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { t } from './idioma.js'
 
 // `doctor`: acha a instalacao do conector nesta maquina, diz em que versao ela esta e destrava a
 // atualizacao automatica quando ela parou.
@@ -103,9 +104,14 @@ export function runDoctor(dirExplicito, out = process.stdout) {
   const dirs = acharInstalacoes(dirExplicito)
   if (!dirs.length) {
     out.write(
-      'Nenhuma instalação por cópia local encontrada nesta máquina.\n' +
-        'Isso normalmente é boa notícia: quer dizer que você usa a instalação que baixa a versão\n' +
-        'mais nova toda vez, e nunca fica para trás. Nada a fazer aqui.\n',
+      t(
+        'Nenhuma instalação por cópia local encontrada nesta máquina.\n' +
+          'Isso normalmente é boa notícia: quer dizer que você usa a instalação que baixa a versão\n' +
+          'mais nova toda vez, e nunca fica para trás. Nada a fazer aqui.\n',
+        'No local-copy installation found on this machine.\n' +
+          'That is usually good news: it means you use the installation that fetches the newest\n' +
+          'version every time, and never falls behind. Nothing to do here.\n',
+      ),
     )
     return 0
   }
@@ -115,15 +121,15 @@ export function runDoctor(dirExplicito, out = process.stdout) {
     out.write(`\n${r.dir}\n`)
     if (r.erro) {
       problemas++
-      out.write(`  NÃO consegui atualizar: ${r.erro}\n`)
-      out.write(`  segue na versão ${r.versao}. Mande esta saída para quem cuida do Trail.\n`)
+      out.write(t(`  NÃO consegui atualizar: ${r.erro}\n`, `  Could NOT update: ${r.erro}\n`))
+      out.write(t(`  segue na versão ${r.versao}. Mande esta saída para quem cuida do Trail.\n`, `  still on version ${r.versao}. Send this output to whoever looks after Trail.\n`))
     } else if (r.mudou) {
-      out.write(`  destravada: estava em ${r.antes}, agora está em ${r.depois} (versão ${r.versao})\n`)
+      out.write(t(`  destravada: estava em ${r.antes}, agora está em ${r.depois} (versão ${r.versao})\n`, `  unblocked: was on ${r.antes}, now on ${r.depois} (version ${r.versao})\n`))
     } else {
-      out.write(`  já estava em dia (${r.depois}, versão ${r.versao})\n`)
+      out.write(t(`  já estava em dia (${r.depois}, versão ${r.versao})\n`, `  already up to date (${r.depois}, version ${r.versao})\n`))
     }
-    if (r.sujo) out.write(`  aviso: sobraram mudanças locais nesta pasta:\n${r.sujo.split('\n').map((l) => '    ' + l).join('\n')}\n`)
+    if (r.sujo) out.write(t(`  aviso: sobraram mudanças locais nesta pasta:\n`, `  warning: local changes were left in this folder:\n`) + `${r.sujo.split('\n').map((l) => '    ' + l).join('\n')}\n`)
   }
-  out.write('\nFeche e abra a sua ferramenta de IA para a versão nova valer.\n')
+  out.write(t('\nFeche e abra a sua ferramenta de IA para a versão nova valer.\n', '\nRestart your AI tool for the new version to take effect.\n'))
   return problemas ? 1 : 0
 }

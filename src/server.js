@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { createApiClient } from './api.js'
 import { planejarFaxina, REGUA_MRP, MRP_ALVO, INSTRUCAO_FAXINA } from './memory-review.js'
 import { blindarItem, INSTRUCAO_TERCEIRO } from './procedencia.js'
+import { t } from './idioma.js'
 
 // A versao vem do package.json, NAO escrita a mao aqui: com a publicacao automatica, um numero
 // duplicado passaria a mentir sozinho a cada release - e e justo esta string que a ferramenta de
@@ -244,7 +245,7 @@ function cortarCorpo(e, teto) {
 export async function runServer(config) {
   if (!config.url || !config.token) {
     process.stderr.write(
-      '[trail] not connected yet - run: npx -y usetrail@latest login\n',
+      t('[trail] ainda nao conectado - rode: npx -y usetrail@latest login\n', '[trail] not connected yet - run: npx -y usetrail@latest login\n'),
     )
   }
   const api = createApiClient(config)

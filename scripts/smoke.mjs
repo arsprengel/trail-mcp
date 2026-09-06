@@ -124,6 +124,36 @@ async function main() {
     }
   })
 
+  // A LINGUA DA TELA. O padrao TEM que ser ingles: a maquina de um desconhecido raramente
+  // declara lingua (WSL sai com C.UTF-8, o Windows nao exporta LANG), e foi cair em portugues
+  // nesse silencio que fez o conector parecer inacabado nas vitrines. Prova os tres caminhos -
+  // silencio, sistema em portugues, e a variavel do proprio Trail mandando.
+  await passo('a tela sai em ingles por padrao, e em portugues so quando alguem diz', () => {
+    const semLingua = { ...process.env }
+    for (const v of ['LANG', 'LC_ALL', 'LC_MESSAGES', 'TRAIL_LANG', 'TETHER_LANG']) delete semLingua[v]
+
+    const mudo = rodar(process.execPath, [binario, '--help'], { env: semLingua })
+    precisa(mudo.status === 0, `a ajuda saiu com codigo ${mudo.status}`)
+    precisa(mudo.stdout.includes('the Trail connector'), 'sem lingua declarada, a ajuda nao saiu em ingles')
+
+    const sistemaPt = rodar(process.execPath, [binario, '--help'], { env: { ...semLingua, LANG: 'pt_BR.UTF-8' } })
+    precisa(sistemaPt.stdout.includes('o conector do Trail'), 'com o sistema em portugues, a ajuda nao saiu em portugues')
+
+    const forcadoPt = rodar(process.execPath, [binario, '--help'], { env: { ...semLingua, TRAIL_LANG: 'pt' } })
+    precisa(forcadoPt.stdout.includes('o conector do Trail'), 'TRAIL_LANG=pt nao trouxe a ajuda em portugues')
+
+    // A variavel do Trail manda MAIS que o sistema: e o que salva quem tem o sistema numa lingua
+    // e quer o conector noutra - o caso de quem programa em pt com o terminal em ingles.
+    const forcadoEn = rodar(process.execPath, [binario, '--help'], { env: { ...semLingua, LANG: 'pt_BR.UTF-8', TRAIL_LANG: 'en' } })
+    precisa(forcadoEn.stdout.includes('the Trail connector'), 'TRAIL_LANG=en nao venceu o sistema em portugues')
+
+    // E o aviso que o desconhecido ve primeiro: o servidor subindo sem conta nenhuma.
+    const semConta = rodar(process.execPath, [binario, 'status'], {
+      env: { ...semLingua, HOME: temp, XDG_CONFIG_HOME: join(temp, '.config') },
+    })
+    precisa(semConta.stdout.includes('MISSING'), 'sem lingua declarada, o status nao saiu em ingles')
+  })
+
   await passo('sem credencial, aponta pro servico hospedado em vez de morrer', () => {
     const r = rodar(process.execPath, [binario, 'status'], {
       env: { ...process.env, HOME: temp, XDG_CONFIG_HOME: join(temp, '.config'), TETHER_PROJECT: 'smoke' },

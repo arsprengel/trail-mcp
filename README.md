@@ -130,6 +130,7 @@ the "AI token" panel in the app.
 | `TRAIL_API_URL` | Your own Trail's address. Saved after the first login. Defaults to the hosted service. |
 | `TRAIL_PROJECT` | Forces the project name (default: the open folder). |
 | `TRAIL_API_TOKEN` | A token directly, skipping the browser login. Useful in CI. |
+| `TRAIL_LANG` | Language of what the connector prints on screen: `pt` or `en`. Without it, your system's language, and English when your system states none. Never changes what the agent reads. |
 
 The former names (`TETHER_*`) keep working, with no deadline - the product used to be called
 Tether, and nothing anyone already configured has to change.
