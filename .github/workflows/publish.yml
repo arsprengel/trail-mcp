@@ -106,6 +106,27 @@ jobs:
         if: steps.versao.outputs.publicar == 'sim'
         run: npm publish --access public --provenance
 
+      # O registro aceita a publicacao NA HORA, mas leva cerca de um minuto pra servir a versao
+      # nova pra quem pergunta. Tudo que vem depois depende disso: o catalogo oficial confere no
+      # registro antes de aceitar a ficha, e recusou a de 1.29.1 por perguntar cedo demais. Esperar
+      # aqui, uma vez, conserta a ordem inteira.
+      - name: Esperar o registro servir a versao
+        if: steps.versao.outputs.publicar == 'sim'
+        env:
+          NOME: ${{ steps.versao.outputs.nome }}
+          VER: ${{ steps.versao.outputs.versao }}
+        run: |
+          for i in $(seq 1 18); do
+            LA=$(npm view "$NOME@$VER" version 2>/dev/null || true)
+            if [ "$LA" = "$VER" ]; then
+              echo "::notice::$NOME@$VER esta no ar."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::publicou sem erro, mas $NOME@$VER nao aparece no registro."
+          exit 1
+
       - name: Marcar a versao e anotar a novidade
         if: steps.versao.outputs.publicar == 'sim'
         env:
@@ -124,8 +145,10 @@ jobs:
       # vitrines independentes, entao entrar aqui vale mais que entrar em cada uma na mao. A
       # credencial e a prova de dominio (uma linha no DNS de usetrail.dev + a chave guardada nos
       # segredos): nada interativo e nada que vence.
+      # Tambem roda quando alguem dispara a esteira a mao: e assim que se reenvia a ficha de uma
+      # versao que ja foi publicada mas que o catalogo recusou na hora.
       - name: Anunciar a versao no catalogo oficial
-        if: steps.versao.outputs.publicar == 'sim'
+        if: steps.versao.outputs.publicar == 'sim' || github.event_name == 'workflow_dispatch'
         env:
           CHAVE: ${{ secrets.MCP_DNS_PRIVATE_KEY }}
           VER: ${{ steps.versao.outputs.versao }}
@@ -145,20 +168,3 @@ jobs:
           else
             echo "::warning::o pacote foi publicado, mas o catalogo oficial recusou a ficha - republique quando resolver."
           fi
-
-      - name: Conferir que chegou no registro
-        if: steps.versao.outputs.publicar == 'sim'
-        env:
-          NOME: ${{ steps.versao.outputs.nome }}
-          VER: ${{ steps.versao.outputs.versao }}
-        run: |
-          for i in 1 2 3 4 5 6; do
-            LA=$(npm view "$NOME@$VER" version 2>/dev/null || true)
-            if [ "$LA" = "$VER" ]; then
-              echo "::notice::$NOME@$VER esta no ar."
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::publicou sem erro, mas $NOME@$VER nao aparece no registro."
-          exit 1
