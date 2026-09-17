@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
-import { join, basename } from 'node:path'
+import { join } from 'node:path'
 import { mkdirSync, readFileSync, writeFileSync, rmSync, chmodSync } from 'node:fs'
-import { findTetherProject } from './tether-file.js'
+import { resolverProjeto } from './tether-file.js'
 import { PASTAS_DE_CONFIG, espelharAmbiente } from './nome-legado.js'
 
 // Idempotente: bin.js ja chama, mas config.js tambem e importado direto em teste e em script solto.
@@ -80,6 +80,6 @@ export function resolveConfig() {
   let token = process.env.TETHER_API_TOKEN || saved?.token || ''
   const authEnv = process.env.TETHER_API_AUTH
   if (!token && authEnv) token = authEnv.replace(/^Bearer\s+/i, '').trim()
-  const project = process.env.TETHER_PROJECT || findTetherProject(process.cwd()) || basename(process.cwd())
+  const { project } = resolverProjeto(process.cwd())
   return { url, token, project }
 }

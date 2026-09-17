@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
 import { ARQUIVOS_DE_PASTA } from './nome-legado.js'
 
 // Vinculo por pasta: um arquivo .tether na pasta (ou em qualquer ancestral) diz qual projeto
@@ -54,6 +54,87 @@ export function findTetherFile(startDir) {
 export function findTetherProject(startDir) {
   const f = findTetherFile(startDir)
   return f ? f.name : null
+}
+
+// Copia de trabalho separada (worktree do git): a mesma pasta de projeto aberta duas vezes, uma
+// por branch, cada uma com o NOME DA BRANCH. Como o nome do projeto sai do nome da pasta, a sessao
+// aberta numa dessas copias pedia ao servidor um projeto que nao existe e voltava com tracker e
+// MRP vazios - sem erro nenhum, parecendo projeto novo. Daqui em diante a copia separada responde
+// pelo projeto da copia PRINCIPAL. Tudo resolvido lendo arquivo, sem chamar o git.
+// Espelha tether/src/core/tether-file.ts.
+
+// Ponteiro .git de uma pasta: pasta = repositorio normal; arquivo com `gitdir: X` = copia separada.
+function lerPonteiroGit(dir) {
+  const dotGit = join(dir, '.git')
+  let info
+  try {
+    info = statSync(dotGit)
+  } catch {
+    return null
+  }
+  if (info.isDirectory()) return { gitdir: dotGit, separada: false }
+  if (!info.isFile()) return null
+  let content
+  try {
+    content = readFileSync(dotGit, 'utf8')
+  } catch {
+    return null
+  }
+  const alvo = content.match(/^\s*gitdir\s*[:=]\s*(.+?)\s*$/m)?.[1]
+  return alvo ? { gitdir: resolve(dir, alvo), separada: true } : null
+}
+
+// Pasta .git COMUM (a do repositorio principal) a partir do gitdir da copia separada. O git deixa
+// isso escrito num arquivo `commondir`; sem ele, o proprio caminho .../.git/worktrees/<nome> diz.
+function pastaGitComum(gitdir) {
+  try {
+    const c = readFileSync(join(gitdir, 'commondir'), 'utf8').trim()
+    if (c) return resolve(gitdir, c)
+  } catch {
+    /* copia antiga sem commondir: cai na leitura do caminho */
+  }
+  return gitdir.match(/^(.*)[/\\]worktrees[/\\][^/\\]+$/)?.[1] ?? null
+}
+
+// A pasta que REPRESENTA o projeto. So muda de resposta dentro de uma copia de trabalho separada;
+// em pasta comum (com ou sem git) devolve a pasta aberta, igual a sempre.
+export function pastaDoProjeto(startDir) {
+  let dir = startDir
+  for (;;) {
+    const ponteiro = lerPonteiroGit(dir)
+    if (ponteiro) {
+      if (!ponteiro.separada) return startDir
+      const comum = pastaGitComum(ponteiro.gitdir)
+      const raiz = comum ? dirname(comum) : null
+      // Repositorio bare (sem copia de trabalho principal) nao tem pasta pra emprestar o nome, e
+      // ponteiro quebrado tambem nao: melhor manter a pasta aberta do que apontar pro lugar errado.
+      return raiz && existsSync(join(raiz, '.git')) ? raiz : startDir
+    }
+    const parent = dirname(dir)
+    if (parent === dir) return startDir
+    dir = parent
+  }
+}
+
+// O arquivo de pasta mais proximo, e - so quando a pasta aberta e uma copia separada - o da copia
+// principal, que a subida a partir do worktree nao alcanca quando ele fica fora da arvore.
+function acharArquivoDePasta(cwd, pasta) {
+  const perto = findTetherFile(cwd)
+  if (perto?.name) return perto
+  if (pasta !== cwd) {
+    const principal = findTetherFile(pasta)
+    if (principal?.name) return principal
+  }
+  return perto
+}
+
+// A regra unica de escolha do projeto, num lugar so: TETHER_PROJECT > arquivo de pasta > nome da
+// pasta. Devolve tambem o arquivo (pro auto-heal e pro aviso de amarracao) e a pasta que deu o nome.
+export function resolverProjeto(cwd, env = process.env) {
+  const pasta = pastaDoProjeto(cwd)
+  const arquivo = env.TETHER_PROJECT ? null : acharArquivoDePasta(cwd, pasta)
+  const project = env.TETHER_PROJECT || arquivo?.name || basename(pasta)
+  return { project, arquivo, pasta }
 }
 
 // Troca o NOME no conteudo do .tether preservando comentarios/estrutura. Prefere a linha

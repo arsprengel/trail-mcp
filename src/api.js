@@ -7,6 +7,15 @@ export function createApiClient({ url, token, project }, fetchImpl = fetch) {
   // do token (o servidor resolve); este header so separa "aberto pela IA" de "aberto no dashboard".
   const authHeaders = { authorization: `Bearer ${token}`, 'x-tether-actor': 'agent' }
 
+  // Falha de rede (ou servidor reiniciando) chegava na IA como erro cru da 1a tentativa, e uma
+  // gravacao se perdia por um soluco de segundos. Repete so o que da pra repetir sem duplicar:
+  // ler, alterar campos e apagar levam ao MESMO estado se rodarem duas vezes; criar, nao - um POST
+  // repetido viraria um item/lembrete/anexo a mais no tracker, entao ele nunca e repetido.
+  const METODOS_REPETIVEIS = new Set(['GET', 'PATCH', 'DELETE'])
+  const ESPERA_MS = [300, 900]
+
+  const dormir = (ms) => new Promise((r) => setTimeout(r, ms))
+
   async function req(method, path, body) {
     if (!base || !token) {
       throw new Error('nao conectado - rode: TETHER_API_URL=<url> node <pasta-do-conector>/bin.js login')
@@ -17,7 +26,31 @@ export function createApiClient({ url, token, project }, fetchImpl = fetch) {
       headers['content-type'] = 'application/json'
       opt.body = JSON.stringify(body)
     }
-    return fetchImpl(base + path, opt)
+    const repetivel = METODOS_REPETIVEIS.has(method)
+    let ultimoMotivo = ''
+    for (let tentativa = 0; ; tentativa++) {
+      const ultima = !repetivel || tentativa >= ESPERA_MS.length
+      try {
+        const r = await fetchImpl(base + path, opt)
+        // 502/503/504 e servidor reiniciando ou proxy sem quem atender: esperar resolve. Os outros
+        // erros sao resposta legitima do servidor e sobem na hora, com a mensagem dele.
+        if (!ultima && (r.status === 502 || r.status === 503 || r.status === 504)) {
+          ultimoMotivo = `HTTP ${r.status}`
+        } else {
+          return r
+        }
+      } catch (e) {
+        ultimoMotivo = e instanceof Error ? e.message : String(e)
+        if (ultima) {
+          throw new Error(
+            `o servidor do Trail nao respondeu (${ultimoMotivo})` +
+              (repetivel ? ` - tentei ${ESPERA_MS.length + 1}x` : '') +
+              '. A operacao pode NAO ter sido gravada: confira antes de seguir.',
+          )
+        }
+      }
+      await dormir(ESPERA_MS[tentativa])
+    }
   }
 
   async function jsonOrThrow(r, ctx) {

@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { resolveConfig } from './config.js'
-import { findTetherFile } from './tether-file.js'
+import { resolverProjeto } from './tether-file.js'
 import { formatFaxina } from './memory-review.js'
 import { deTerceiro, MARCA_TERCEIRO, LEGENDA_TERCEIRO } from './procedencia.js'
 
@@ -102,9 +102,11 @@ export function formatAmarracao(a) {
 // conector so fala com a nuvem, e runHook ja saiu antes se nao houver login. As outras duas
 // guardas repetem, de proposito, a regra que ESCOLHE o projeto: TETHER_PROJECT manda e nao
 // envolve arquivo; nome igual ao da pasta e o caso normal, nao um aviso.
-export function projetoAmarrado(cwd, arquivo) {
+// `pastaDoNome` e a pasta que DEU o nome do projeto: numa copia de trabalho separada (worktree)
+// ela e a copia principal, senao todo worktree acusaria amarracao onde nao ha nenhuma.
+export function projetoAmarrado(pastaDoNome, arquivo) {
   if (process.env.TETHER_PROJECT || !arquivo?.name) return null
-  const pasta = basename(cwd)
+  const pasta = basename(pastaDoNome)
   if (arquivo.name === pasta) return null
   return { pasta, project: arquivo.name, arquivo: arquivo.path }
 }
@@ -222,6 +224,13 @@ export function envelopeAntigravity(resumo) {
   return JSON.stringify({ injectSteps: [{ userMessage: texto }] })
 }
 
+// Espelho de formatIndisponivel em tether/src/hooks/format.ts.
+export const INDISPONIVEL = [
+  '[Trail indisponivel] Ao abrir esta sessao nao consegui falar com o servidor do Trail (rede, timeout ou resposta de erro).',
+  'Os itens e a MRP deste projeto NAO estao neste contexto: a ausencia deles aqui nao quer dizer que o projeto esteja vazio.',
+  'Antes de afirmar qualquer coisa sobre o que existe ou nao no projeto, tente de novo com list_items e list_memory. Se continuar falhando, diga isso ao usuario em vez de seguir no escuro.',
+].join('\n')
+
 async function fetchJson(url, token, fetchImpl = fetch) {
   try {
     const r = await fetchImpl(url, {
@@ -239,8 +248,7 @@ export async function runHook(command, input = {}, fetchImpl = fetch) {
   const cfg = resolveConfig()
   if (!cfg.url || !cfg.token) return { exitCode: 0 }
   const cwd = input.cwd ?? process.cwd()
-  const arquivoDePasta = process.env.TETHER_PROJECT ? null : findTetherFile(cwd)
-  const project = process.env.TETHER_PROJECT || arquivoDePasta?.name || basename(cwd)
+  const { project, arquivo: arquivoDePasta, pasta } = resolverProjeto(cwd)
   const q = '?project=' + encodeURIComponent(project)
 
   if (command === 'context') {
@@ -249,12 +257,16 @@ export async function runHook(command, input = {}, fetchImpl = fetch) {
       fetchJson(cfg.url + '/api/memory' + q, cfg.token, fetchImpl),
       fetchJson(cfg.url + '/api/reminders' + q + '&status=pending', cfg.token, fetchImpl),
     ])
-    const open = (items ?? []).filter((i) => i.status !== 'done' && i.status !== 'dropped')
+    // null = nao deu pra falar com o servidor (rede, timeout ou HTTP ruim). Calar aqui e
+    // indistinguivel de "projeto sem nada" - foi assim que uma sessao concluiu que o tracker
+    // estava vazio e seguiu sem ele. Nesse caso o unico texto injetado e o aviso.
+    if (items === null) return { exitCode: 0, stdout: sessionStart(INDISPONIVEL) }
+    const open = items.filter((i) => i.status !== 'done' && i.status !== 'dropped')
     const mem = memory ?? []
     // Servidor antigo (que ainda nao serve lembrete) devolve null: o bloco simplesmente nao
     // aparece, e nada mais muda.
     const avisoDeLembrete = formatLembretes(lembretes ?? [])
-    const amarracao = projetoAmarrado(cwd, arquivoDePasta)
+    const amarracao = projetoAmarrado(pasta, arquivoDePasta)
     // Silencio total em pasta sem nada rastreado - senao poluiria todo projeto da maquina, ja
     // que com a nuvem ligada qualquer pasta responde. A convencao de status vai junto sempre que
     // o hook ja fala (inclusive em projeto so com MRP): nada mais cobra item in_progress no fim

@@ -1,5 +1,5 @@
 import { resolveConfig } from './config.js'
-import { findTetherFile, rewriteTetherFile } from './tether-file.js'
+import { resolverProjeto, rewriteTetherFile } from './tether-file.js'
 
 // Auto-heal do .tether: se a pasta aponta pra um projeto que foi RENOMEADO no Trail, reescreve o
 // arquivo pro nome atual (silencioso, idempotente). So quando ha config (url+token) e o nome vem
@@ -11,7 +11,8 @@ export async function healTetherIfRenamed(cwd = process.cwd(), fetchImpl = fetch
     if (process.env.TETHER_PROJECT) return
     const cfg = resolveConfig()
     if (!cfg.url || !cfg.token) return
-    const found = findTetherFile(cwd)
+    // Mesma resolucao da leitura: numa copia de trabalho separada o arquivo mora na copia principal.
+    const found = resolverProjeto(cwd).arquivo
     if (!found || !found.name) return
     const url = cfg.url + '/api/projects/' + encodeURIComponent(found.name) + '/resolve'
     const r = await fetchImpl(url, {
